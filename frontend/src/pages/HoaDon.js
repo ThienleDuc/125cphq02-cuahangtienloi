@@ -7,13 +7,13 @@ import { dataNguoiDung } from "../data/dataNguoiDung";
 import { exportExcel } from "../components/exportExcel";
 import { FaMoneyBillWave } from "react-icons/fa";
 import { dataHoaDon } from "../data/dataHoaDon";
-import { isRole } from "../utils/roleUtils";
 import { useSession } from "../contexts/SessionContext";
+import { getRoleFlags } from "../utils/roleCheck";
 
 function HoaDon({ currentUserId = 1 }) {
   const { session }= useSession();
-  const isQuanLyCuaHang = isRole(session?.role, "Quản lý cửa hàng");
-  const isThuNgan = isRole(session?.role, "Nhân viên thu ngân");
+  const { isQuanLyCuaHang } = getRoleFlags(session?.role);
+  const { isThuNgan } = getRoleFlags(session?.role);
 
   // Dữ liệu demo phương thức thanh toán
   const phuongThucOptions = ["Tiền mặt", "Chuyển khoản", "Thẻ ngân hàng"];

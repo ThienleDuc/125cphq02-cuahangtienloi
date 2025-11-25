@@ -3,17 +3,17 @@ import React, { useState, useEffect } from "react";
 import TableComponent from "../components/TableComponent";
 import { FaCheck, FaRegCircle, FaUserClock, FaMoneyBillWave } from "react-icons/fa"; 
 import SelectWithScroll from "../components/SelectWithScroll";
-import { isRole } from "../utils/roleUtils";
+import { getRoleFlags } from "../utils/roleCheck";
 
 import { dataChamCong } from "../data/dataChamCong";
 import { dataNguoiDung } from "../data/dataNguoiDung";
 import { useSession } from "../contexts/SessionContext";
 
 function ThanhToanCa() {
-  const session = useSession();
-  const isQuanLyCuaHang = isRole(session?.role, "Quản lý cửa hàng");
-  const isThuNgan = isRole(session?.role, "Nhân viên thu ngân");
-  const isQuanKho = isRole(session?.role, "Nhân viên kho");
+  const { session } = useSession();
+  const { isQuanLyCuaHang } = getRoleFlags(session?.role);
+  const { isThuNgan } = getRoleFlags(session?.role);
+  const { isQuanKho } = getRoleFlags(session?.role);
 
   const [data, setData] = useState(
     dataChamCong.map(row => {

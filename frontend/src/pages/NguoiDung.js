@@ -2,17 +2,17 @@
 import React, { useState, useMemo, useEffect } from "react";
 import TableComponent from "../components/TableComponent";
 import SelectWithScroll from "../components/SelectWithScroll";
+import { getRoleFlags } from "../utils/roleCheck";
 
 import { dataNguoiDung } from "../data/dataNguoiDung";
 import { dataVaiTro } from "../data/dataVaiTro";
-import { isRole } from "../utils/roleUtils";
 import PasswordInput from "../components/PasswordInput";
 import { useSession } from "../contexts/SessionContext";
 
-const session = useSession;
-const isQuanLyCuaHang = isRole(session?.role, "Quản lý cửa hàng")
-
 function NguoiDung() {
+  const { session } = useSession();
+  const { isQuanLyCuaHang } = getRoleFlags(session?.role);
+
   // Form dữ liệu Thêm/Sửa
   const [formData, setFormData] = useState({
     name: "",
@@ -86,7 +86,7 @@ function NguoiDung() {
 
       return matchName && matchRole && matchStatus;
     });
-  }, [searchName, searchRole, searchStatus]);
+  }, [isQuanLyCuaHang, searchName, searchRole, searchStatus]);
 
   return (
     <div className="container-fluid px-4">

@@ -6,16 +6,16 @@ import { Link } from "react-router-dom";
 import { dataPhieuNhap } from "../data/dataPhieuNhap";
 import { dataNhaCungCap } from "../data/dataNhaCungCap";
 import { dataNguoiDung } from "../data/dataNguoiDung";
-import { isRole } from "../utils/roleUtils";
 import { useSession } from "../contexts/SessionContext";
+import { getRoleFlags } from "../utils/roleCheck";
 
 function PhieuNhap() {
   const [data, setData] = useState(dataPhieuNhap);
   const [currentRow, setCurrentRow] = useState(null);
 
-  const session = useSession();
-  const isQuanLyCuaHang = isRole(session?.role, "Quản lý cửa hàng");
-  const isQuanKho = isRole(session?.role, "Nhân viên kho");
+  const { session } = useSession();
+  const { isQuanLyCuaHang } = getRoleFlags(session?.role);
+  const { isQuanKho } = getRoleFlags(session?.role);
 
   // Filter
   const [filterNgay, setFilterNgay] = useState("");
@@ -34,34 +34,34 @@ function PhieuNhap() {
   const [nguoiNhapEdit, setNguoiNhapEdit] = useState("");
   const [tongTienEdit, setTongTienEdit] = useState("");
 
-  const columns = ["Mã PN", "Ngày nhập", "Nhà cung cấp", "Người nhập", "Tổng tiền", "Tác vụ"];
+  const columns = ["Mã PN", "Ngày nhập", "Mã NCC", "Nhà cung cấp", "Mã người nhập", "Người nhập", "Tổng tiền", "Tác vụ"];
 
+  // Filter dữ liệu
   const filteredData = useMemo(() => {
-    return dataPhieuNhap.filter(d => {
-      const ngayMatch =
-        !filterNgay || d[1] === filterNgay;
-
-      const nccMatch =
-        filterNCC === "Tất cả" || d[2] === parseInt(filterNCC);
-
-      const nguoiNhapMatch =
-        filterNguoiNhap === "Tất cả" || d[3] === parseInt(filterNguoiNhap);
-
-      // --- Lọc theo vai trò ---
-      const roleMatch = isQuanKho
-        ? d[3] === parseInt(session?.id)  // chỉ lấy của chính mình
-        : true;                           // còn lại lấy hết
-
+    return data.filter(d => {
+      const ngayMatch = !filterNgay || d[1] === filterNgay;
+      const nccMatch = filterNCC === "Tất cả" || d[2] === parseInt(filterNCC);
+      const nguoiNhapMatch = filterNguoiNhap === "Tất cả" || d[4] === parseInt(filterNguoiNhap);
+      const roleMatch = isQuanKho ? d[4] === parseInt(session?.id) : true;
       return ngayMatch && nccMatch && nguoiNhapMatch && roleMatch;
     });
-  }, [filterNgay, filterNCC, filterNguoiNhap, isQuanKho, session?.id]);
+  }, [filterNgay, filterNCC, filterNguoiNhap, isQuanKho, session?.id, data]);
 
   // Thêm mới
   const handleAdd = () => {
     if (!ngayNhapAdd || !nccAdd || !nguoiNhapAdd || !tongTienAdd) return;
-    const newId = Math.max(...dataPhieuNhap.map(d => d[0])) + 1;
-    const newRow = [newId, ngayNhapAdd, parseInt(nccAdd), parseInt(nguoiNhapAdd), parseInt(tongTienAdd)];
-    dataPhieuNhap.push(newRow);
+    const newId = Math.max(...data.map(d => d[0])) + 1;
+    const nccObj = dataNhaCungCap.find(n => n[0] === parseInt(nccAdd));
+    const nguoiNhapObj = dataNguoiDung.find(n => n[0] === parseInt(nguoiNhapAdd));
+    const newRow = [
+      newId,
+      ngayNhapAdd,
+      parseInt(nccAdd),
+      nccObj ? nccObj[1] : "",
+      parseInt(nguoiNhapAdd),
+      nguoiNhapObj ? nguoiNhapObj[1] : "",
+      parseInt(tongTienAdd)
+    ];
     setData([...data, newRow]);
     setNgayNhapAdd(""); setNCCAdd(""); setNguoiNhapAdd(""); setTongTienAdd("");
   };
@@ -69,11 +69,21 @@ function PhieuNhap() {
   // Sửa
   const handleSave = () => {
     if (!currentRow) return;
+    const nccObj = dataNhaCungCap.find(n => n[0] === parseInt(nccEdit));
+    const nguoiNhapObj = dataNguoiDung.find(n => n[0] === parseInt(nguoiNhapEdit));
     const updatedData = data.map(d =>
-      d[0] === currentRow[0] ? [d[0], ngayNhapEdit, parseInt(nccEdit), parseInt(nguoiNhapEdit), parseInt(tongTienEdit)] : d
+      d[0] === currentRow[0]
+        ? [
+            d[0],
+            ngayNhapEdit,
+            parseInt(nccEdit),
+            nccObj ? nccObj[1] : "",
+            parseInt(nguoiNhapEdit),
+            nguoiNhapObj ? nguoiNhapObj[1] : "",
+            parseInt(tongTienEdit)
+          ]
+        : d
     );
-    const indexDemo = dataPhieuNhap.findIndex(d => d[0] === currentRow[0]);
-    if (indexDemo !== -1) dataPhieuNhap[indexDemo] = [currentRow[0], ngayNhapEdit, parseInt(nccEdit), parseInt(nguoiNhapEdit), parseInt(tongTienEdit)];
     setData(updatedData);
     setCurrentRow(null);
   };
@@ -81,10 +91,7 @@ function PhieuNhap() {
   // Xóa
   const handleDelete = () => {
     if (!currentRow) return;
-    const filtered = data.filter(d => d[0] !== currentRow[0]);
-    setData(filtered);
-    const indexDemo = dataPhieuNhap.findIndex(d => d[0] === currentRow[0]);
-    if (indexDemo !== -1) dataPhieuNhap.splice(indexDemo, 1);
+    setData(data.filter(d => d[0] !== currentRow[0]));
     setCurrentRow(null);
   };
 
@@ -93,8 +100,8 @@ function PhieuNhap() {
     setCurrentRow(row);
     setNgayNhapEdit(row[1]);
     setNCCEdit(row[2].toString());
-    setNguoiNhapEdit(row[3].toString());
-    setTongTienEdit(row[4].toString());
+    setNguoiNhapEdit(row[4].toString());
+    setTongTienEdit(row[6].toString());
   };
 
   return (
@@ -147,12 +154,15 @@ function PhieuNhap() {
       <TableComponent
         title="Danh sách Phiếu Nhập"
         columns={columns}
+        hiddenColumns={[2, 4]}
         data={filteredData.map(row => [
-          row[0],
-          row[1],
-          dataNhaCungCap.find(n => n[0] === row[2])?.[1],
-          dataNguoiDung.find(n => n[0] === row[3])?.[1],
-          row[4].toLocaleString("vi-VN") + " VNĐ",
+          row[0], // Mã PN
+          row[1], // Ngày nhập
+          row[2], // Mã NCC
+          row[3], // Tên NCC
+          row[4], // Mã người nhập
+          row[5], // Người nhập
+          row[6].toLocaleString("vi-VN") + " VNĐ"
         ])}
         renderCell={(cell, column, row) => {
           if (column === "Tác vụ") {

@@ -462,6 +462,67 @@ function CongNo() {
           </div>
         </div>
       </div>
+
+      {/* --- Modal Xem chi tiết --- */}
+      <div className="modal fade" id="viewModal" tabIndex="-1">
+        <div className="modal-dialog modal-lg">
+          <div className="modal-content">
+            <div className="modal-header">
+              <h5 className="modal-title">Chi tiết công nợ</h5>
+              <button type="button" className="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div className="modal-body">
+              {currentRow ? (
+                <div className="row g-3">
+                  <div className="col-md-6">
+                    <strong>Mã công nợ:</strong> {currentRow[0]}
+                  </div>
+                  <div className="col-md-6">
+                    <strong>Loại công nợ:</strong> {currentRow[1]}
+                  </div>
+                  <div className="col-md-6">
+                    <strong>Đối tượng:</strong> {currentRow[2]}
+                  </div>
+                  <div className="col-md-6">
+                    <strong>Số tiền:</strong> {currentRow[3].toLocaleString()} VNĐ
+                  </div>
+                  <div className="col-md-6">
+                    <strong>Hạn thanh toán:</strong> {currentRow[4]}
+                  </div>
+                  <div className="col-md-6">
+                    <strong>Trạng thái:</strong> {currentRow[5]}
+                  </div>
+                  {currentRow[6] !== null && (
+                    <div className="col-md-6">
+                      <strong>Mã hóa đơn:</strong> {currentRow[6]}
+                    </div>
+                  )}
+                  {currentRow[7] && (
+                    <div className="col-md-6">
+                      <strong>Tên khách hàng:</strong> {currentRow[7]}
+                    </div>
+                  )}
+                  {currentRow[8] !== null && (
+                    <div className="col-md-6">
+                      <strong>Mã nhà cung cấp:</strong> {currentRow[8]}
+                    </div>
+                  )}
+                  {currentRow[9] && (
+                    <div className="col-md-6">
+                      <strong>Tên nhà cung cấp:</strong> {currentRow[9]}
+                    </div>
+                  )}
+                </div>
+              ) : (
+                <p>Không có dữ liệu.</p>
+              )}
+            </div>
+            <div className="modal-footer">
+              <button className="btn btn-secondary" data-bs-dismiss="modal">Đóng</button>
+            </div>
+          </div>
+        </div>
+      </div>
     </div>
   );
 }

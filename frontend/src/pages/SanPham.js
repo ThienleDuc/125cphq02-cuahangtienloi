@@ -3,14 +3,14 @@ import React, { useState } from "react";
 import TableComponent from "../components/TableComponent";
 import SelectWithScroll from "../components/SelectWithScroll";
 import { dataSanPham } from "../data/dataSanPham";
-import { isRole } from "../utils/roleUtils";
+import { getRoleFlags } from "../utils/roleCheck";
 import { useSession } from "../contexts/SessionContext";
 
 function SanPham() {
   const [currentRow, setCurrentRow] = useState(null);
 
-  const session = useSession();
-  const isQuanLyCuaHang = isRole(session?.role, "Quản lý cửa hàng");
+  const { session } = useSession();
+  const { isQuanLyCuaHang } = getRoleFlags(session?.role);
 
   // Bộ lọc
   const [searchName, setSearchName] = useState("");     // Tìm theo tên

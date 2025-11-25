@@ -45,7 +45,8 @@ export function handleLogin(email, password) {
     name: user[1],
     email: user[2],
     role: user[6],      // tên role (chuỗi)
-    status: user[4]
+    status: user[4],
+    avatar: user[5] || ""
   };
 
   // ---- KHÔNG LƯU SESSION TẠI ĐÂY ----
