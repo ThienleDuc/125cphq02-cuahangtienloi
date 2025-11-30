@@ -1,313 +1,297 @@
-// src/pages/ThanhToanCa.jsx
-import React, { useState, useEffect } from "react";
+import React, { useState, useMemo, useEffect } from "react";
 import TableComponent from "../components/TableComponent";
-import { FaCheck, FaRegCircle, FaUserClock, FaMoneyBillWave } from "react-icons/fa"; 
 import SelectWithScroll from "../components/SelectWithScroll";
-import { getRoleFlags } from "../utils/roleCheck";
-
-import { dataChamCong } from "../data/dataChamCong";
-import { dataNguoiDung } from "../data/dataNguoiDung";
 import { useSession } from "../contexts/SessionContext";
+import { getRoleFlags } from "../utils/roleCheck";
+import { dataNguoiDung, getUserById } from "../data/dataNguoiDung";
+import { calcHours } from "../data/dataChamCong";
+import { getShiftById } from "../data/dataThoiGianBieu";
+import { FaSquare, FaCheckSquare } from "react-icons/fa";
+import { getAttendanceByFilter} from "../data/dataChamCong"
+import { getAssignmentById } from "../data/dataPhanCong";
 
 function ThanhToanCa() {
   const { session } = useSession();
   const { isQuanLyCuaHang } = getRoleFlags(session?.role);
-  const { isThuNgan } = getRoleFlags(session?.role);
-  const { isQuanKho } = getRoleFlags(session?.role);
 
-  const [data, setData] = useState(
-    dataChamCong.map(row => {
-      const [
-        maChamCong,
-        maLichNV,
-        maNV,
-        tenNV,
-        maCa,
-        tenCa,
-        gioVao,
-        gioRa,
-        tongGio,
-        tien,
-        tienCongGio,
-        trangThai,
-        ngayLam,
-        ghiChu
-      ] = row;
-      return {
-        id: maChamCong,
-        maLichNV,
-        maNV,
-        tenNV,
-        maCa,
-        tenCa,
-        gioVao,
-        gioRa,
-        tongGio,
-        tien,
-        tienCongGio,
-        trangThai,
-        ngayLam,
-        ghiChu,
-        selected: false,
-        chamCongDone: false
-      };
-    })
-  );
-
-  // ====== FILTER STATE ======
-  const [filterStart, setFilterStart] = useState("");
-  const [filterEnd, setFilterEnd] = useState("");
-  const [filterMaNV, setFilterMaNV] = useState("");   
-  const [filterTenNV, setFilterTenNV] = useState(""); 
+  const [filterFromDate, setFilterFromDate] = useState("");
+  const [filterToDate, setFilterToDate] = useState("");
   const [filterTrangThai, setFilterTrangThai] = useState("");
-  const [filteredData, setFilteredData] = useState(data);
+  const [filterNguoi, setFilterNguoi] = useState("");
 
-  const employees = dataNguoiDung.map(u => ({ maNV: u[0], tenNV: u[1] }));
-
-  // ====== LỌC DỮ LIỆU ======
-    useEffect(() => {
-      let filtered = [...data];
-
-      // --- Lọc theo ngày ---
-      if (filterStart) filtered = filtered.filter(d => d.ngayLam >= filterStart);
-      if (filterEnd) filtered = filtered.filter(d => d.ngayLam <= filterEnd);
-
-      // --- Lọc theo vai trò ---
-      if (isQuanLyCuaHang) {
-        // giữ nguyên, không lọc theo id
-      } else if (isQuanKho || isThuNgan) {
-        // Nhân viên kho & thu ngân chỉ xem dữ liệu của chính mình
-        filtered = filtered.filter(d => String(d.maNV) === String(session?.id));
-      }
-
-      // --- Lọc theo các trường khác ---
-      if (filterMaNV) filtered = filtered.filter(d => String(d.maNV) === String(filterMaNV));
-      if (filterTenNV) filtered = filtered.filter(d => d.tenNV === filterTenNV);
-      if (filterTrangThai) filtered = filtered.filter(d => d.trangThai === filterTrangThai);
-
-      setFilteredData(filtered);
-    }, [
-      filterStart,
-      filterEnd,
-      filterMaNV,
-      filterTenNV,
-      filterTrangThai,
-      data,
-      isQuanLyCuaHang,
-      isQuanKho,
-      isThuNgan,
-      session?.id
-    ]);
-
-  const tongTien = filteredData.reduce(
-    (acc, row) => (row.selected ? acc + row.tien : acc),
-    0
-  );
-
-  const handleThanhToanTatCa = () => {
-    const newData = data.map(r =>
-      r.selected && r.trangThai === "Chưa thanh toán"
-        ? { ...r, trangThai: "Đã thanh toán" }
-        : r
-    );
-    setData(newData);
-    alert("Đã thanh toán các dòng đã chọn!");
-  };
+  const [checkedMap, setCheckedMap] = useState({});
+  const [checkAll, setCheckAll] = useState(false);
+  const [dataUpdate, setDataUpdate] = useState({});
 
   const columns = [
-    "Mã chấm công",
-    "Mã nhân viên",
-    "Tên nhân viên",
-    "Mã ca",
-    "Tên ca",
+    "Mã CC",
+    "Nhân viên",
     "Ngày làm",
     "Giờ vào",
     "Giờ ra",
     "Tổng giờ làm",
     "Tiền thực lãnh",
-    "Tiền công giờ",
     "Trạng thái",
     "Ghi chú",
     "Tác vụ"
   ];
 
+const [attendanceData, setAttendanceData] = useState([]);
+
+// Khởi tạo dữ liệu gốc khi component mount
+useEffect(() => {
+  const data = getAttendanceByFilter({
+    fromDate: "",
+    toDate: "",
+    trangThai: "",
+    maNguoiDung: isQuanLyCuaHang ? filterNguoi : session?.id
+  }).map((a, index)=> {
+    const assignment = getAssignmentById(a._maLichNV);
+    const ca = getShiftById(assignment?.shiftId);
+    const donGia = ca?.donGia || 0;
+
+    const gioVao = a._gioVao || "";
+    const gioRa = a._gioRa || "";
+    const tongGioLam = calcHours(gioVao, gioRa);
+    const tienThucLanh = tongGioLam * donGia;
+
+    const user = getUserById(a._maNguoiDung);
+
+    return {
+      ...a,
+      _id: a._id || index,
+      _tenNguoiDung: user?.name || "--",
+      _tongGioLam: tongGioLam,
+      _tienThucLanh: tienThucLanh,
+      _ngayLam: assignment.workDate
+    };
+  });
+
+  setAttendanceData(data);
+}, [filterNguoi, isQuanLyCuaHang, session?.id]); // Các dependency cần thiết
+
+// filteredData chỉ dùng useMemo để lọc dựa trên attendanceData
+const filteredData = useMemo(() => {
+  return attendanceData.filter(a => {
+    const matchFromDate = !filterFromDate || a._ngayCapNhat >= filterFromDate;
+    const matchToDate = !filterToDate || a._ngayCapNhat <= filterToDate;
+    const matchTrangThai = !filterTrangThai || a._trangThai === filterTrangThai;
+    const matchNguoi = !filterNguoi || a._maNguoiDung === filterNguoi;
+
+    return matchFromDate && matchToDate && matchTrangThai && matchNguoi;
+  });
+}, [attendanceData, filterFromDate, filterToDate, filterTrangThai, filterNguoi]);
+
+
+  // Checkbox toggle 1 row
+ const toggleChecked = id => {
+  setCheckedMap(prev => {
+    const newChecked = { ...prev, [id]: !prev[id] };
+    if (!newChecked[id]) setCheckAll(false);
+    return newChecked;
+  });
+};
+
+  // Checkbox toggle all
+  const toggleCheckAll = () => {
+    const newCheckAll = !checkAll;
+    setCheckAll(newCheckAll);
+
+    const newCheckedMap = {};
+    filteredData.forEach(r => (newCheckedMap[r._id] = newCheckAll));
+    setCheckedMap(newCheckedMap);
+  };
+
+  // Toggle trạng thái thanh toán 1 row
+  const toggleTrangThai = id => {
+    setDataUpdate(prev => ({ ...prev, [id]: true }));
+  };
+
+  // Thanh toán tất cả rows được chọn
+  const handleThanhToan = () => {
+    setDataUpdate(prev => {
+      const newData = { ...prev };
+      filteredData.forEach(r => {
+        if (checkedMap[r._id]) newData[r._id] = true;
+      });
+      return newData;
+    });
+    alert("Đã thanh toán các ca được chọn!");
+  };
+
+  const totalSelectedAmount = filteredData.reduce((sum, r) => {
+    return checkedMap[r._id] ? r._tienThucLanh + sum : sum;
+  }, 0);
+
+
+  const handleChamCong = id => {
+    const now = new Date();
+    const gioVao = `${String(now.getHours()).padStart(2, "0")}:${String(now.getMinutes()).padStart(2, "0")}`;
+    setAttendanceData(prev =>
+      prev.map(r => (r._id === id ? { ...r, _gioVao: gioVao } : r))
+    );
+  };
+    
   return (
     <div className="container-fluid px-4">
-      <h1 className="mt-4">Thanh Toán & Chấm Công</h1>
-      <p className="mb-3">Danh sách thanh toán & chấm công.</p>
+      <h1 className="mt-4">Thanh Toán Ca</h1>
+      <p className="mb-3">Bảng dưới đây hiển thị các ca làm việc, tổng giờ và tiền thực lãnh.</p>
 
-      {/* ====== FILTER ====== */}
-      <div className="row g-3 mb-3 align-items-end">
-        <div className="col-md-2">
-          <label className="form-label">Ngày bắt đầu</label>
+      {/* Filters */}
+      <div className="row g-3 mb-3">
+        <div className="col-md-3">
+          <label>Từ ngày</label>
           <input
             type="date"
             className="form-control"
-            value={filterStart}
-            onChange={e => setFilterStart(e.target.value)}
+            value={filterFromDate}
+            onChange={e => setFilterFromDate(e.target.value)}
           />
         </div>
 
-        <div className="col-md-2">
-          <label className="form-label">Ngày kết thúc</label>
+        <div className="col-md-3">
+          <label>Đến ngày</label>
           <input
             type="date"
             className="form-control"
-            value={filterEnd}
-            onChange={e => setFilterEnd(e.target.value)}
+            value={filterToDate}
+            onChange={e => setFilterToDate(e.target.value)}
+          />
+        </div>
+
+        <div className="col-md-3">
+          <label>Trạng thái</label>
+          <SelectWithScroll
+            options={["Tất cả", "Đã thanh toán", "Chưa thanh toán"]}
+            value={
+              filterTrangThai === ""
+                ? "Tất cả"
+                : filterTrangThai
+            }
+            onChange={val => setFilterTrangThai(val === "Tất cả" ? "" : val)}
           />
         </div>
 
         {isQuanLyCuaHang && (
-         <>
-           <div className="col-md-2">
-              <label className="form-label">Mã nhân viên</label>
-              <SelectWithScroll
-                options={["Tất cả", ...employees.map(e => e.maNV)]}
-                value={filterMaNV || "Tất cả"}
-                onChange={val => setFilterMaNV(val === "Tất cả" ? "" : val)}
-              />
-            </div>
-
-            <div className="col-md-2">
-              <label className="form-label">Tên nhân viên</label>
-              <SelectWithScroll
-                options={["Tất cả", ...employees.map(e => e.tenNV)]}
-                value={filterTenNV || "Tất cả"}
-                onChange={val => setFilterTenNV(val === "Tất cả" ? "" : val)}
-              />
-            </div>
-         </>
+          <div className="col-md-3">
+            <label>Nhân viên</label>
+           <SelectWithScroll
+              options={["Tất cả", ...dataNguoiDung.map(u => `${u.id}: ${u.name}`)]} 
+              value={
+                filterNguoi === ""
+                  ? "Tất cả"
+                  : `${filterNguoi}: ${getUserById(String(filterNguoi))?.name || "--"}`
+              }
+              onChange={val =>
+                setFilterNguoi(val === "Tất cả" ? "" : String(val.split(":")[0]))
+              }
+            />
+          </div>
         )}
-
-        <div className="col-md-2">
-          <label className="form-label">Trạng thái</label>
-          <SelectWithScroll
-            options={["Tất cả", "Chưa thanh toán", "Đã thanh toán"]}
-            value={filterTrangThai || "Tất cả"}
-            onChange={val => setFilterTrangThai(val === "Tất cả" ? "" : val)}
-          />
-        </div>
       </div>
 
-      {/* ====== TABLE ====== */}
+      {/* Table */}
       <TableComponent
-        title="Danh sách thanh toán ca"
+        title="Danh sách Thanh Toán Ca"
         columns={columns}
-        hiddenColumns={[0, 1, 3, 8]}
-        data={filteredData.map(row => [
-          row.id,
-          row.maNV,
-          row.tenNV,
-          row.maCa,
-          row.tenCa,
-          row.ngayLam,
-          row.gioVao,
-          row.gioRa,
-          row.tongGio,
-          row.tien.toLocaleString(),
-          row.tienCongGio,
-          row.trangThai,
-          row.ghiChu,
-          ""
+        data={filteredData.map(r => [
+          r._id,
+          r._tenNguoiDung,
+          r._ngayLam,
+          r._gioVao || "--:--",
+          r._gioRa || "--:--",
+          Number(r._tongGioLam || 0).toFixed(2),          
+          Number(r._tienThucLanh || 0).toLocaleString("vi-VN"),
+          dataUpdate[r._id] ?? r._trangThai,
+          r._ghiChu
         ])}
         renderCell={(cell, column, row) => {
-          const dataRow = filteredData.find(d => d.id === row[0]);
+          const id = row[0];
+
           if (column === "Tác vụ") {
+            const isChecked = checkedMap[id] || false;
             return (
-              <td className="d-flex align-items-center gap-2">
-                <button
-                  className="btn btn-outline-primary btn-sm"
-                  title="Chấm công"
-                  onClick={() => {
-                    const updated = data.map(r =>
-                      r.id === dataRow.id
-                        ? { ...r, chamCongDone: true, gioVao: r.gioVao || "08:00" }
-                        : r
-                    );
-                    setData(updated);
+              <td className="d-flex gap-1">
+                <span
+                  style={{
+                    cursor: "pointer",
+                    fontSize: "1rem",
+                    width: "30px",
+                    height: "31px",
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    color: isChecked ? "#28a745" : "#6c757d"
                   }}
-                  disabled={dataRow.gioVao !== "" || dataRow.chamCongDone}
+                  onClick={() => toggleChecked(id)}
                 >
-                  <FaUserClock />
-                </button>
-                {isQuanLyCuaHang && (
-                  <button
-                  className="btn btn-outline-success btn-sm"
-                  title="Thanh toán"
-                  onClick={() => {
-                    const updated = data.map(r =>
-                      r.id === dataRow.id && r.trangThai === "Chưa thanh toán"
-                        ? { ...r, trangThai: "Đã thanh toán" }
-                        : r
-                    );
-                    setData(updated);
-                  }}
-                  disabled={dataRow.trangThai === "Đã thanh toán"}
-                >
-                  <FaMoneyBillWave />
-                </button>
-                )}
-                <label
-                  className="btn btn-outline-secondary btn-sm mb-0"
-                  onClick={() => {
-                    const updated = data.map(r =>
-                      r.id === dataRow.id ? { ...r, selected: !r.selected } : r
-                    );
-                    setData(updated);
-                  }}
-                >
-                  {dataRow.selected ? <FaCheck /> : <FaRegCircle />}
-                </label>
+                  {isChecked ? <FaCheckSquare size={18} /> : <FaSquare size={18} />}
+                </span>
+
+                <span
+                style={{
+                  cursor: "pointer",
+                  fontSize: "1rem",
+                  width: "30px",
+                  height: "31px",
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  color: "#007bff"
+                }}
+                title="Chấm công"
+                onClick={() => handleChamCong(id)}
+              >
+                ⏱️
+              </span>
               </td>
             );
           }
-          if (column === "Tiền thực lãnh") return <td>{dataRow.tien.toLocaleString()} VNĐ</td>;
+
+          if (column === "Trạng thái") {
+            const isPaid = Boolean(dataUpdate[id] ?? (row[7] === true || row[7] === "Đã thanh toán"));
+            return (
+              <td>
+                {isQuanLyCuaHang ? (
+                  <button
+                    className={`btn btn-sm ${isPaid ? "btn-success" : "btn-outline-danger"}`}
+                    disabled={isPaid}
+                    onClick={() => !isPaid && toggleTrangThai(id)}
+                  >
+                    {isPaid ? "Đã thanh toán" : "Chưa thanh toán"}
+                  </button>
+                ) : (
+                  <span>{isPaid ? "Đã thanh toán" : "Chưa thanh toán"}</span>
+                )}
+
+              </td>
+            );
+          }
+
           return <td>{cell}</td>;
         }}
       />
 
-      <div className="d-flex align-items-center justify-content-between mt-3 gap-3">
-        {/* Checkbox Chọn tất cả */}
-        <div className="form-check">
+      {/* Footer */}
+      <div className="d-flex justify-content-between align-items-center mt-3">
+        <div>
           <input
-            className="form-check-input"
             type="checkbox"
-            id="selectAll"
-            checked={filteredData.every(row => row.selected) && filteredData.length > 0}
-            onChange={e => {
-              const checked = e.target.checked;
-              const updated = data.map(r =>
-                filteredData.find(f => f.id === r.id)
-                  ? { ...r, selected: checked }
-                  : r
-              );
-              setData(updated);
-            }}
+            checked={checkAll}
+            onChange={toggleCheckAll}
+            className="form-check-input me-2"
           />
-          <label className="form-check-label" htmlFor="selectAll">
-            Chọn tất cả
-          </label>
+          <label className="form-check-label">Chọn tất cả</label>
         </div>
 
-        {/* Tổng tiền & Thanh toán */}
-        <div className="d-flex align-items-center gap-2">
-          <label className="me-2 mb-0">Tổng tiền:</label>
-          <input
-            type="text"
-            className="form-control"
-            readOnly
-            value={`${tongTien.toLocaleString()} VNĐ`}
-            style={{ width: 160 }}
-          />
+        <div className="d-flex gap-2 align-items-center">
+          <strong>Tổng tiền thực lãnh đã chọn: </strong>
+          {totalSelectedAmount.toLocaleString("vi-VN")} VNĐ
+
           {isQuanLyCuaHang && (
-            <button
-            className="btn btn-success"
-            style={{ height: "40px" }}
-            onClick={handleThanhToanTatCa}
-          >
-            Thanh Toán
-          </button>
+            <button className="btn btn-sm btn-success" onClick={handleThanhToan}>
+              Thanh toán
+            </button>
           )}
         </div>
       </div>

@@ -1,167 +1,207 @@
-// src/pages/DoanhThuSanPham.jsx
-import React, { useState, useEffect } from "react";
+// src/pages/DoanhThu.js
+import React, { useState, useMemo } from "react";
 import TableComponent from "../components/TableComponent";
-import { FaMoneyBillWave } from "react-icons/fa";
-import { exportExcel } from "../components/exportExcel";
-import { dataDoanhThu } from "../data/dataDoanhThu";
 import SelectWithScroll from "../components/SelectWithScroll";
-import { isRole } from "../utils/roleUtils";
 import { useSession } from "../contexts/SessionContext";
+import { getRoleFlags } from "../utils/roleCheck";
+import { dataSanPham } from "../data/dataSanPham";
+import { dataNguoiDung } from "../data/dataNguoiDung";
+import { getRevenueByFilter } from "../data/dataDoanhThu";
+import { FaSquare, FaCheckSquare } from "react-icons/fa";
+import { exportExcel } from "../components/exportExcel";
 
-function DoanhThuSanPham() {
-  const [data, setData] = useState(dataDoanhThu);
+function DoanhThu() {
+  const { session } = useSession();
+  const { isQuanLyCuaHang, isThuNgan } = getRoleFlags(session?.role);
 
-  const {session} = useSession();
-  const isQuanLyCuaHang = isRole(session?.role, "Quản lý cửa hàng");
-  const isThuNgan = isRole(session?.role, "Nhân viên thu ngân");
-  // FILTER STATES
-  const [fromDate, setFromDate] = useState("");
-  const [toDate, setToDate] = useState("");
-  const [filterSanPham, setFilterSanPham] = useState("all");
-  const [filterThuNgan, setFilterThuNgan] = useState("all");
+  // Filter
+  const [filterFromDate, setFilterFromDate] = useState("");
+  const [filterToDate, setFilterToDate] = useState("");
+  const [filterSP, setFilterSP] = useState(""); // lưu productId
+  const [filterNguoi, setFilterNguoi] = useState(""); // lưu userId
 
-  const columns = [
-    "Mã HĐ",
-    "Sản phẩm",
-    "Số lượng",
-    "Đơn giá",
-    "Thành tiền",
-    "Ngày lập",
-    "Mã thu ngân",
-    "Tên người lập"
-  ];
+  // Checkbox
+  const [checkedMap, setCheckedMap] = useState({});
+  const [checkAll, setCheckAll] = useState(false);
 
-  // TỔNG DOANH THU
-  const tongDoanhThu = data.reduce((acc, row) => acc + row.thanhTien, 0);
+  const columns = ["Mã HD", "Ngày lập", "Người lập", "Sản phẩm", "Số lượng", "Đơn giá", "Thành tiền", "Mã sản phẩm","Tác vụ"];
 
-  // APPLY FILTERS TỰ ĐỘNG
-  useEffect(() => {
-    let filtered = dataDoanhThu;
+  // Lọc dữ liệu
+  const filteredData = useMemo(() => {
+    const revenues = getRevenueByFilter({
+      fromDate: filterFromDate,
+      toDate: filterToDate,
+      productId: filterSP,
+      userId: isThuNgan ? session?.id : filterNguoi
+    });
 
-    // Lọc theo ngày
-    if (fromDate)
-      filtered = filtered.filter(r => r.ngayLap >= fromDate);
-    if (toDate)
-      filtered = filtered.filter(r => r.ngayLap <= toDate);
+    return revenues;
+  }, [filterFromDate, filterToDate, filterSP, filterNguoi, session?.id, isThuNgan]);
 
-    // Lọc sản phẩm
-    if (filterSanPham !== "all")
-      filtered = filtered.filter(r => r.tenSP === filterSanPham);
-
-    // Thu ngân
-    if (isThuNgan) {
-      filtered = filtered.filter(r => r.maNguoiDung === session.id);
-    } else if (filterThuNgan !== "all") {
-      filtered = filtered.filter(r => r.tenNguoiLap === filterThuNgan);
-    }
-
-    setData(filtered);
-  }, [fromDate, toDate, filterSanPham, filterThuNgan, isThuNgan, session.id]);
-
-  // EXPORT EXCEL
-  const handleExport = () => {
-    const exportData = data.map(row => ({
-      "Mã HĐ": row.maHD,
-      "Sản phẩm": row.tenSP,
-      "Số lượng": row.soLuong,
-      "Đơn giá": row.donGia.toLocaleString("vi-VN") + " VNĐ",
-      "Thành tiền": row.thanhTien.toLocaleString("vi-VN") + " VNĐ",
-      "Ngày lập": row.ngayLap,
-      "Tên người lập": row.tenNguoiLap
-    }));
-    exportExcel(exportData, [], "DoanhThuSanPham.xlsx");
+  // Toggle checkbox từng dòng
+  const toggleChecked = (key) => {
+    setCheckedMap(prev => {
+      const newChecked = { ...prev, [key]: !prev[key] };
+      if (!newChecked[key]) setCheckAll(false);
+      return newChecked;
+    });
   };
 
-  // Lấy danh sách Sản phẩm & Thu ngân unique
-  const sanPhamOptions = ["Tất cả", ...new Set(dataDoanhThu.map(r => r.tenSP))];
-  const thuNganOptions = ["Tất cả", ...new Set(dataDoanhThu.map(r => r.tenNguoiLap))];
+  // Toggle checkbox chọn tất cả
+  const toggleCheckAll = () => {
+    const newCheckAll = !checkAll;
+    setCheckAll(newCheckAll);
+
+    const newCheckedMap = {};
+    filteredData.forEach(r => {
+      newCheckedMap[r.invoiceId + "_" + r.productId] = newCheckAll;
+    });
+    setCheckedMap(newCheckedMap);
+  };
+
+  // Tổng tiền đã chọn
+  const totalSelectedAmount = filteredData.reduce((sum, r) => {
+    return checkedMap[r.invoiceId + "_" + r.productId] ? sum + r.totalPrice : sum;
+  }, 0);
+
+  // Xuất Excel
+  const handleExportExcel = () => {
+    const selectedData = filteredData
+      .filter(r => checkedMap[r.invoiceId + "_" + r.productId])
+      .map(r => ({
+        "Mã HD": r.invoiceId,
+        "Ngày lập": r.invoiceDate,
+        "Người lập": r.userName,
+        "Mã SP": r.productId,
+        "Tên SP": r.productName,
+        "Số lượng": r.quantity,
+        "Đơn giá": r.unitPrice,
+        "Thành tiền": r.totalPrice,
+        "Mã sản phẩm": r.productId
+      }));
+
+    if (selectedData.length === 0) {
+      alert("Vui lòng chọn ít nhất 1 bản ghi để xuất Excel!");
+      return;
+    }
+
+    exportExcel(selectedData, [], `DoanhThu_${Date.now()}.xlsx`);
+  };
 
   return (
     <div className="container-fluid px-4">
-      <h1 className="mt-4">Doanh Thu Sản Phẩm</h1>
-      <p className="mb-3">Trang xem doanh thu theo sản phẩm, ngày lập, và người lập.</p>
+      <h1 className="mt-4">Doanh Thu</h1>
+      <p className="mb-3">Bảng dưới đây hiển thị doanh thu theo sản phẩm.</p>
 
-      {/* BỘ LỌC */}
-      <div className="row g-2 mb-3 align-items-end">
-        
-        <div className="col-md-2">
+
+      {/* Filter */}
+      <div className="row g-3 mb-3">
+        <div className="col-md-3">
           <label className="form-label">Từ ngày</label>
           <input
             type="date"
-            value={fromDate}
             className="form-control"
-            onChange={e => setFromDate(e.target.value)}
+            value={filterFromDate}
+            onChange={e => setFilterFromDate(e.target.value)}
           />
         </div>
-
-        <div className="col-md-2">
+        <div className="col-md-3">
           <label className="form-label">Đến ngày</label>
           <input
             type="date"
-            value={toDate}
             className="form-control"
-            onChange={e => setToDate(e.target.value)}
+            value={filterToDate}
+            onChange={e => setFilterToDate(e.target.value)}
           />
         </div>
-
         <div className="col-md-3">
           <label className="form-label">Sản phẩm</label>
           <SelectWithScroll
-            options={sanPhamOptions}
-            value={filterSanPham === "all" ? "Tất cả" : filterSanPham}
-            onChange={val => setFilterSanPham(val === "Tất cả" ? "all" : val)}
+            options={["Tất cả", ...dataSanPham.map(sp => `${sp.id}: ${sp.name}`)]}
+            value={filterSP === "" ? "Tất cả" : `${filterSP}: ${dataSanPham.find(sp => sp.id === filterSP)?._name}`}
+            onChange={val => setFilterSP(val === "Tất cả" ? "" : val.split(":")[0])}
           />
         </div>
-
         {isQuanLyCuaHang && (
           <div className="col-md-3">
-          <label className="form-label">Thu ngân</label>
-          <SelectWithScroll
-            options={thuNganOptions}
-            value={filterThuNgan === "all" ? "Tất cả" : filterThuNgan}
-            onChange={val => setFilterThuNgan(val === "Tất cả" ? "all" : val)}
-          />
-        </div>
+            <label className="form-label">Người lập</label>
+            <SelectWithScroll
+              options={["Tất cả", ...dataNguoiDung.map(u => `${u.id}: ${u.name}`)]}
+              value={filterNguoi === "" ? "Tất cả" : `${filterNguoi}: ${dataNguoiDung.find(u => u.id === filterNguoi)?.name}`}
+              onChange={val => setFilterNguoi(val === "Tất cả" ? "" : val.split(":")[0])}
+            />
+          </div>
         )}
-
       </div>
 
-      {/* BẢNG */}
+      {/* Table */}
       <TableComponent
-        title="Bảng Doanh Thu"
+        title="Danh sách Doanh Thu"
         columns={columns}
-        hiddenColumns={[6]}
-        data={data.map(row => [
-          row.maHD,
-          row.tenSP,
-          row.soLuong,
-          row.donGia.toLocaleString("vi-VN") + " VNĐ",
-          row.thanhTien.toLocaleString("vi-VN") + " VNĐ",
-          row.ngayLap,
-          row.maThuNgan,
-          row.tenNguoiLap
-        ])} 
+        hiddenColumns={[7]}
+        data={filteredData.map(r => [
+          r.invoiceId,
+          r.invoiceDate,
+          r.userName,
+          r.productName,
+          r.quantity,
+          r.unitPrice,
+          r.totalPrice,
+          r.productId
+        ])}
+        renderCell={(cell, column, row) => {
+          if (column === "Tác vụ") {
+            const key = row[0] + "_" + row[7];
+            const isChecked = checkedMap[key] || false;
+            return (
+              <td className="d-flex gap-1">
+                <span
+                  style={{
+                    cursor: "pointer",
+                    fontSize: "1rem",
+                    width: "30px",
+                    height: "31px",
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    color: isChecked ? "#28a745" : "#6c757d",
+                    transition: "color 0.2s"
+                  }}
+                  onClick={() => toggleChecked(key)}
+                  title={isChecked ? "Đã chọn" : "Chưa chọn"}
+                >
+                  {isChecked ? <FaCheckSquare size={18} /> : <FaSquare size={18} />}
+                </span>
+              </td>
+            );
+          }
+          return <td>{cell}</td>;
+        }}
       />
 
-      {/* TỔNG DOANH THU & EXPORT */}
-      <div className="d-flex justify-content-end align-items-center mt-3">
-        <div className="me-3 d-flex align-items-center">
-          <label className="me-2 mb-0">Tổng doanh thu:</label>
+      <div className="d-flex justify-content-between align-items-center mt-2">
+        <div>
           <input
-            type="text"
-            className="form-control"
-            value={`${tongDoanhThu.toLocaleString()} VNĐ`}
-            readOnly
-            style={{ width: "200px", opacity: 0.7 }}
+            type="checkbox"
+            checked={checkAll}
+            onChange={toggleCheckAll}
+            id="checkAll"
+            className="form-check-input me-2"
           />
+          <label htmlFor="checkAll" className="form-check-label">Chọn tất cả</label>
         </div>
-        <button className="btn btn-success" onClick={handleExport}>
-          <FaMoneyBillWave className="me-1" /> Xuất báo cáo
-        </button>
+        <div className="d-flex gap-2 align-items-center">
+          <strong>Tổng tiền đã chọn: </strong> {totalSelectedAmount} VNĐ
+          <button
+            className="btn btn-sm btn-outline-success"
+            onClick={handleExportExcel}
+          >
+            <i className="fas fa-file-excel me-1"></i> Xuất Excel
+          </button>
+        </div>
       </div>
-
     </div>
   );
 }
 
-export default DoanhThuSanPham;
+export default DoanhThu;

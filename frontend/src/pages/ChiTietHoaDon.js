@@ -1,123 +1,150 @@
 // src/pages/ChiTietHoaDon.jsx
-import React, { useState, useEffect } from "react";
+import React, { useState, useMemo, useEffect } from "react";
 import { useParams } from "react-router-dom";
 import TableComponent from "../components/TableComponent";
 import SelectWithScroll from "../components/SelectWithScroll";
 import Breadcrumb from "../components/Breadcrumb";
-import { dataChiTietHoaDon } from "../data/dataChiTietHoaDon";
+import { getInvoiceDetailByHD, getInvoiceDetailFilter } from "../data/dataChiTietHoaDon";
 import { dataSanPham } from "../data/dataSanPham";
+import { FaSquare, FaCheckSquare } from "react-icons/fa";
 
-function ChiTietHoaDon() {
-  const { maHD } = useParams();
-  const [data, setData] = useState([]);
+export default function ChiTietHoaDon() {
+  const { maHD } = useParams(); // Mã hóa đơn từ URL
+  const hdDisplay = maHD;
+
+  // States riêng cho từng input
+  const [productId, setProductId] = useState("");
+  const [quantity, setQuantity] = useState("");
+  const [unitPrice, setUnitPrice] = useState("");
   const [currentRow, setCurrentRow] = useState(null);
-  const [selectedSP, setSelectedSP] = useState("");
-  const [soLuong, setSoLuong] = useState("");
-  const [donGia, setDonGia] = useState("");
-  const [filterSP, setFilterSP] = useState("");
+  const [searchProduct, setSearchProduct] = useState("");
 
+  // Lọc dữ liệu theo mã hóa đơn + search
+  const filteredData = useMemo(() => {
+    return getInvoiceDetailFilter({ maHD, productName: searchProduct });
+  }, [maHD, searchProduct]);
+
+  const columns = ["Mã sản phẩm","Sản phẩm", "Số lượng", "Đơn giá", "Thành tiền", "Tác vụ"];
+
+  // Modal Edit / Delete
   useEffect(() => {
-    // Lọc theo MaHD và filterSP mỗi khi filterSP thay đổi
-    const filtered = dataChiTietHoaDon
-      .filter(d => d[0] === Number(maHD))
-      .filter(d => !filterSP || filterSP === "all" || d[1] === Number(filterSP));
-    setData(filtered);
-  }, [maHD, filterSP]);
+    const editModalEl = document.getElementById("editModal");
+    const deleteModalEl = document.getElementById("deleteModal");
 
-  const columns = ["Mã HĐ", "Mã sản phẩm", "Sản phẩm", "Số lượng", "Đơn giá", "Thành tiền", "Tác vụ"];
+    const handleShow = (event) => {
+      const button = event.relatedTarget;
+      if (!button) return;
 
-  const handleEditClick = (row) => {
-    setCurrentRow(row);
-    setSelectedSP(row[1]);
-    setSoLuong(row[3]);
-    setDonGia(row[4]);
-  };
+      const productId = button.getAttribute("data-product-id");
+      if (!productId) return;
 
-  const handleAdd = () => {
-    if (!selectedSP || !soLuong || !donGia) return;
-    const thanhTien = Number(soLuong) * Number(donGia);
-    const newRow = [Number(maHD), Number(selectedSP), Number(soLuong), Number(donGia), thanhTien];
-    setData([...data, newRow]);
-    setSelectedSP("");
-    setSoLuong("");
-    setDonGia("");
-  };
+      const [row] = getInvoiceDetailByHD(maHD, productId);
+      if (!row) return;
 
-  const handleSave = () => {
-    if (!currentRow) return;
-    const thanhTien = Number(soLuong) * Number(donGia);
-    const updatedData = data.map(d =>
-      d[0] === currentRow[0] && d[1] === currentRow[1]
-        ? [d[0], d[1], Number(soLuong), Number(donGia), thanhTien]
-        : d
-    );
-    setData(updatedData);
+      if (button.dataset.bsTarget === "#editModal") {
+        setCurrentRow(row);
+        setProductId(row._productId);
+        setQuantity(row._quantity);
+        setUnitPrice(row._unitPrice);
+      } else if (button.dataset.bsTarget === "#deleteModal") {
+        setCurrentRow(row);
+      }
+    };
+
+    if (editModalEl) editModalEl.addEventListener("show.bs.modal", handleShow);
+    if (deleteModalEl) deleteModalEl.addEventListener("show.bs.modal", handleShow);
+
+    return () => {
+      if (editModalEl) editModalEl.removeEventListener("show.bs.modal", handleShow);
+      if (deleteModalEl) deleteModalEl.removeEventListener("show.bs.modal", handleShow);
+    };
+  }, [maHD]);
+
+  // Thêm mới
+  const handleAddClick = () => {
+    setProductId("");
+    setQuantity("");
+    setUnitPrice("");
     setCurrentRow(null);
   };
 
+  // Checkbox
+  const [checkedMap, setCheckedMap] = useState({});
+  const [checkAll, setCheckAll] = useState(false);
+
+  const toggleChecked = (id) => {
+    setCheckedMap(prev => {
+      const newChecked = { ...prev, [id]: !prev[id] };
+      if (!newChecked[id]) setCheckAll(false);
+      return newChecked;
+    });
+  };
+
+  const toggleCheckAll = () => {
+    const newCheckAll = !checkAll;
+    setCheckAll(newCheckAll);
+    const newCheckedMap = {};
+    filteredData.forEach(r => {
+      newCheckedMap[r._productId] = newCheckAll;
+    });
+    setCheckedMap(newCheckedMap);
+  };
+
+  const totalSelectedAmount = filteredData.reduce((sum, r) => {
+    if (checkedMap[r._productId]) {
+      return sum + (parseInt(r._quantity) * parseFloat(r._unitPrice));
+    }
+    return sum;
+  }, 0);
+
   return (
     <div className="container-fluid px-4">
-      <h1 className="mt-4">Chi Tiết Hóa Đơn</h1>
+      <h1 className="mt-4">Chi tiết Hóa đơn</h1>
+
       <Breadcrumb
         items={[
-          { name: "Hóa Đơn", link: "/lap-hoa-don" },
-          { name: `Chi Tiết Hóa Đơn #${maHD}` }
+          { name: "Hóa đơn", link: "/hoa-don" },
+          { name: "Chi tiết hóa đơn" }
         ]}
       />
 
-      <div className="d-flex justify-content-between align-items-center mb-2">
-        <p className="mb-0">Bảng hiển thị chi tiết sản phẩm trong hóa đơn.</p>
+      <div className="d-flex justify-content-between align-items-center mb-3">
+        <p className="mb-0">Danh sách chi tiết hóa đơn</p>
         <button
           className="btn btn-success"
           data-bs-toggle="modal"
           data-bs-target="#addModal"
-          onClick={() => {
-            setSelectedSP("");
-            setSoLuong("");
-            setDonGia("");
-          }}
+          onClick={handleAddClick}
         >
           <i className="fas fa-plus me-1"></i> Thêm mới
         </button>
       </div>
 
-      {/* Bộ lọc Sản phẩm (tự động render) */}
-      <div className="row g-2 mb-3 align-items-end">
-        <div className="col-md-3">
-          <label className="form-label small">Sản phẩm</label>
-          <SelectWithScroll
-            options={["Tất cả", ...dataSanPham.map(s => s[1])]}
-            value={
-              filterSP === "all" || !filterSP
-                ? "Tất cả"
-                : dataSanPham.find(s => s[0] === Number(filterSP))?.[1] || ""
-            }
-            onChange={val => {
-              if (val === "Tất cả") setFilterSP("all");
-              else {
-                const sp = dataSanPham.find(s => s[1] === val);
-                setFilterSP(sp ? sp[0].toString() : "");
-              }
-            }}
-          />
-        </div>
+      <div className="mb-3" style={{ maxWidth: "300px" }}>
+        <input
+          type="text"
+          className="form-control form-control-sm"
+          placeholder="Tìm theo tên sản phẩm..."
+          value={searchProduct}
+          onChange={e => setSearchProduct(e.target.value)}
+        />
       </div>
 
       <TableComponent
-        title="Danh sách Chi Tiết Hóa Đơn"
+        title="Danh sách chi tiết hóa đơn"
         columns={columns}
-        hiddenColumns={[1]}
-        data={data}
+        hiddenColumns={[0]}
+        data={filteredData.map(d => [d._productId, d._productName, d._quantity, d._unitPrice, parseInt(d._quantity) * parseFloat(d._unitPrice)])}
         renderCell={(cell, column, row) => {
-          // Tác vụ vẫn giữ nút sửa/xóa
           if (column === "Tác vụ") {
+            const isChecked = checkedMap[row[0]] || false;
             return (
-              <td>
+              <td className="d-flex gap-1">
                 <button
-                  className="btn btn-primary btn-sm me-1"
+                  className="btn btn-primary btn-sm"
                   data-bs-toggle="modal"
                   data-bs-target="#editModal"
-                  onClick={() => handleEditClick(row)}
+                  data-product-id={row[0]}
                 >
                   <i className="fas fa-edit"></i>
                 </button>
@@ -125,46 +152,81 @@ function ChiTietHoaDon() {
                   className="btn btn-danger btn-sm"
                   data-bs-toggle="modal"
                   data-bs-target="#deleteModal"
-                  onClick={() => setCurrentRow(row)}
+                  data-product-id={row[0]}
                 >
                   <i className="fas fa-trash-alt"></i>
                 </button>
+                <span
+                  onClick={() => toggleChecked(row[0])}
+                  style={{
+                    cursor: "pointer",
+                    color: isChecked ? "#28a745" : "#6c757d",
+                    display: "flex",
+                    alignItems: "center",
+                    fontSize: "1.2rem"
+                  }}
+                  title={isChecked ? "Đã chọn" : "Chưa chọn"}
+                >
+                  {isChecked ? <FaCheckSquare /> : <FaSquare />}
+                </span>
               </td>
             );
           }
-
-          // Render tất cả các cột còn lại trực tiếp
           return <td>{cell}</td>;
         }}
       />
 
-      {/* Modal Thêm mới */}
+      <div className="d-flex justify-content-between align-items-center mt-2">
+        <div>
+          <input
+            type="checkbox"
+            checked={checkAll}
+            onChange={toggleCheckAll}
+            id="checkAll"
+            className="form-check-input me-2"
+          />
+          <label htmlFor="checkAll" className="form-check-label">Chọn tất cả</label>
+        </div>
+        <div>
+          <strong>Tổng tiền đã chọn: </strong> {totalSelectedAmount} VNĐ
+        </div>
+      </div>
+
+      {/* Modal Add */}
       <div className="modal fade" id="addModal" tabIndex="-1">
         <div className="modal-dialog">
           <div className="modal-content">
             <div className="modal-header">
-              <h5 className="modal-title">Thêm Chi Tiết Hóa Đơn</h5>
+              <h5 className="modal-title">Thêm chi tiết hóa đơn</h5>
               <button type="button" className="btn-close" data-bs-dismiss="modal"></button>
             </div>
             <div className="modal-body">
+              <div className="mb-3" hidden>
+                <label className="form-label">Hóa đơn</label>
+                <input type="text" className="form-control" value={hdDisplay} readOnly />
+              </div>
               <div className="mb-3">
                 <label className="form-label">Sản phẩm</label>
                 <SelectWithScroll
-                  options={dataSanPham.map(s => s[1])}
-                  value={dataSanPham.find(s => s[0] === selectedSP)?.[1] || ""}
-                  onChange={val => {
-                    const sp = dataSanPham.find(s => s[1] === val);
-                    setSelectedSP(sp ? sp[0] : "");
-                  }}
+                  options={["Tất cả", ...dataSanPham.map(sp => `${sp._id ?? sp[0]}: ${sp._name ?? sp[1]}`)]}
+                  value={
+                    productId
+                      ? `${productId}: ${dataSanPham.find(sp => (sp._id ?? sp[0]) === productId)?._name ?? dataSanPham.find(sp => (sp._id ?? sp[0]) === productId)[1]}`
+                      : "Tất cả"
+                  }
+                  onChange={val =>
+                    setProductId(val === "Tất cả" ? "" : val.split(":")[0])
+                  }
                 />
               </div>
+
               <div className="mb-3">
                 <label className="form-label">Số lượng</label>
                 <input
                   type="number"
                   className="form-control"
-                  value={soLuong}
-                  onChange={e => setSoLuong(e.target.value)}
+                  value={quantity}
+                  onChange={e => setQuantity(parseInt(e.target.value))}
                 />
               </div>
               <div className="mb-3">
@@ -172,37 +234,52 @@ function ChiTietHoaDon() {
                 <input
                   type="number"
                   className="form-control"
-                  value={donGia}
-                  onChange={e => setDonGia(e.target.value)}
+                  value={unitPrice}
+                  onChange={e => setUnitPrice(parseInt(e.target.value))}
                 />
               </div>
             </div>
             <div className="modal-footer">
               <button className="btn btn-secondary" data-bs-dismiss="modal">Hủy</button>
-              <button className="btn btn-success" data-bs-dismiss="modal" onClick={handleAdd}>Thêm mới</button>
+              <button
+                className="btn btn-success"
+                data-bs-dismiss="modal"
+                onClick={() => {
+                  alert(`Thêm chi tiết: ${productId}, SL: ${quantity}, ĐG: ${unitPrice}`);
+                }}
+              >
+                Thêm
+              </button>
             </div>
           </div>
         </div>
       </div>
 
-      {/* Modal Sửa */}
+      {/* Modal Edit */}
       <div className="modal fade" id="editModal" tabIndex="-1">
         <div className="modal-dialog">
           <div className="modal-content">
             <div className="modal-header">
-              <h5 className="modal-title">Chỉnh sửa Chi Tiết Hóa Đơn</h5>
+              <h5 className="modal-title">Chỉnh sửa chi tiết hóa đơn</h5>
               <button type="button" className="btn-close" data-bs-dismiss="modal"></button>
             </div>
             <div className="modal-body">
+              <div className="mb-3" hidden>
+                <label className="form-label">Hóa đơn</label>
+                <input type="text" className="form-control" value={hdDisplay} readOnly />
+              </div>
               <div className="mb-3">
                 <label className="form-label">Sản phẩm</label>
                 <SelectWithScroll
-                  options={dataSanPham.map(s => s[1])}
-                  value={dataSanPham.find(s => s[0] === selectedSP)?.[1] || ""}
-                  onChange={val => {
-                    const sp = dataSanPham.find(s => s[1] === val);
-                    setSelectedSP(sp ? sp[0] : "");
-                  }}
+                  options={dataSanPham.map(sp => `${sp._id ?? sp[0]}: ${sp._name ?? sp[1]}`)}
+                  value={
+                    productId
+                      ? `${productId}: ${dataSanPham.find(sp => (sp._id ?? sp[0]) === productId)?._name ?? dataSanPham.find(sp => (sp._id ?? sp[0]) === productId)[1]}`
+                      : ""
+                  }
+                  onChange={val =>
+                    setProductId(val === "" ? "" : val.split(":")[0])
+                  }
                 />
               </div>
               <div className="mb-3">
@@ -210,8 +287,8 @@ function ChiTietHoaDon() {
                 <input
                   type="number"
                   className="form-control"
-                  value={soLuong}
-                  onChange={e => setSoLuong(e.target.value)}
+                  value={quantity}
+                  onChange={e => setQuantity(parseInt(e.target.value))}
                 />
               </div>
               <div className="mb-3">
@@ -219,29 +296,28 @@ function ChiTietHoaDon() {
                 <input
                   type="number"
                   className="form-control"
-                  value={donGia}
-                  onChange={e => setDonGia(e.target.value)}
-                />
-              </div>
-              <div className="mb-3">
-                <label className="form-label">Thành tiền</label>
-                <input
-                  type="number"
-                  className="form-control"
-                  value={soLuong && donGia ? soLuong * donGia : 0}
-                  readOnly
+                  value={unitPrice}
+                  onChange={e => setUnitPrice(parseInt(e.target.value))}
                 />
               </div>
             </div>
             <div className="modal-footer">
               <button className="btn btn-secondary" data-bs-dismiss="modal">Hủy</button>
-              <button className="btn btn-primary" data-bs-dismiss="modal" onClick={handleSave}>Lưu</button>
+              <button
+                className="btn btn-primary"
+                data-bs-dismiss="modal"
+                onClick={() => {
+                  alert(`Cập nhật chi tiết: ${productId}, SL: ${quantity}, ĐG: ${unitPrice}`);
+                }}
+              >
+                Lưu
+              </button>
             </div>
           </div>
         </div>
       </div>
 
-      {/* Modal Xóa */}
+      {/* Modal Delete */}
       <div className="modal fade" id="deleteModal" tabIndex="-1">
         <div className="modal-dialog modal-sm">
           <div className="modal-content">
@@ -249,14 +325,22 @@ function ChiTietHoaDon() {
               <h5 className="modal-title">Xác nhận xóa</h5>
               <button type="button" className="btn-close" data-bs-dismiss="modal"></button>
             </div>
-            <div className="modal-body">Bạn có chắc muốn xóa chi tiết hóa đơn này?</div>
+            <div className="modal-body">
+              <p>
+                Bạn có chắc muốn xóa chi tiết sản phẩm <strong>{currentRow?.productName}</strong> của hóa đơn <strong>{hdDisplay}</strong>?
+              </p>
+            </div>
             <div className="modal-footer">
               <button className="btn btn-secondary" data-bs-dismiss="modal">Không</button>
-              <button className="btn btn-danger" data-bs-dismiss="modal" onClick={() => {
-                if (!currentRow) return;
-                setData(data.filter(d => !(d[0] === currentRow[0] && d[1] === currentRow[1])));
-                setCurrentRow(null);
-              }}>Có</button>
+              <button
+                className="btn btn-danger"
+                data-bs-dismiss="modal"
+                onClick={() => {
+                  alert(`Xóa chi tiết: ${currentRow?.productName}`);
+                }}
+              >
+                Có
+              </button>
             </div>
           </div>
         </div>
@@ -264,5 +348,3 @@ function ChiTietHoaDon() {
     </div>
   );
 }
-
-export default ChiTietHoaDon;

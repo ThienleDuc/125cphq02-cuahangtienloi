@@ -6,7 +6,7 @@ import PasswordInput from "../../components/PasswordInput";
 import { getRoleFlags } from "../../utils/roleCheck";
 import { useSession } from "../../contexts/SessionContext";
 
-function LoginAdmin({ onLogin }) {
+function LoginAdmin() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
@@ -18,7 +18,6 @@ function LoginAdmin({ onLogin }) {
     e.preventDefault();
     setError("");
 
-    // Gọi handleLogin
     const result = handleLogin(email, password);
 
     if (!result.success) {
@@ -26,17 +25,19 @@ function LoginAdmin({ onLogin }) {
       return;
     }
 
-    // ---- KIỂM TRA ROLE DÙNG roleCheck ----
     const flags = getRoleFlags(result.user.role);
 
+    // Kiểm tra role tương ứng với trang login này
     if (!flags.isQuanTriHeThong) {
       setError("Bạn không có quyền truy cập trang Quản trị hệ thống!");
       return;
     }
 
-    login(result.user); // lưu session vào context
+    // Lưu session vào Context (cũng đồng thời lưu vào localStorage trong Provider)
+    login(result.user);
+
+    // Điều hướng đến trang chính cho Quản trị hệ thống
     navigate("/nguoi-dung");
-    window.location.reload();
   };
 
   return (
@@ -49,11 +50,8 @@ function LoginAdmin({ onLogin }) {
         {error && <div className="alert alert-danger">{error}</div>}
 
         <form onSubmit={handleSubmit}>
-          {/* Username */}
           <div className="input-group mb-3">
-            <span className="input-group-text">
-              <i className="fas fa-user"></i>
-            </span>
+            <span className="input-group-text"><i className="fas fa-user"></i></span>
             <input
               type="email"
               className="form-control"
@@ -63,7 +61,6 @@ function LoginAdmin({ onLogin }) {
             />
           </div>
 
-          {/* Password */}
           <div className="input-group mb-3">
             <PasswordInput
               value={password}

@@ -68,7 +68,7 @@ function App() {
               <Route path="/nguoi-dung" element={session ? <NguoiDung /> : <Navigate to={getDefaultRoute()} />} />
               <Route path="/vai-tro" element={session ? <VaiTro /> : <Navigate to={getDefaultRoute()} />} />
               <Route path="/quyen-han" element={session ? <QuyenHan /> : <Navigate to={getDefaultRoute()} />} />
-              <Route path="/vai-tro-quyen-han" element={session ? <VaiTroQuyenHan /> : <Navigate to={getDefaultRoute()} />} />
+              <Route path="/vai-tro/:maVT" element={session ? <VaiTroQuyenHan /> : <Navigate to={getDefaultRoute()} />} />
 
               <Route path="/nhan-vien" element={session ? <NguoiDung /> : <Navigate to={getDefaultRoute()} />} />
               <Route path="/san-pham" element={session ? <SanPham /> : <Navigate to={getDefaultRoute()} />} />

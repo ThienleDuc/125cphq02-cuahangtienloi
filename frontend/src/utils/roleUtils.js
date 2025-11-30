@@ -7,12 +7,16 @@ import { dataVaiTro } from "../data/dataVaiTro";
  * @returns {object|null} { id, name, description } hoặc null nếu không tìm thấy
  */
 export const getRoleByName = (roleName) => {
-  const role = dataVaiTro.find(vt => vt[1] === roleName);
+  const role = dataVaiTro.find(vt => {
+    const name = vt?.name ?? vt._name ?? vt[1]; // getter name ưu tiên
+    return name === roleName;
+  });
   if (!role) return null;
+
   return {
-    id: role[0],
-    name: role[1],
-    description: role[2],
+    id: role?.id ?? role._id ?? role[0],
+    name: role?.name ?? role._name ?? role[1],
+    description: role?.description ?? role._description ?? role[2],
   };
 };
 
@@ -29,7 +33,7 @@ export const isRole = (roleName, checkRole) => roleName === checkRole;
  * @returns {Array} danh sách role dạng { id, name, description }
  */
 export const getAllRoles = () => dataVaiTro.map(vt => ({
-  id: vt[0],
-  name: vt[1],
-  description: vt[2],
+  id: vt?.id ?? vt._id ?? vt[0],
+  name: vt?.name ?? vt._name ?? vt[1],
+  description: vt?.description ?? vt._description ?? vt[2],
 }));

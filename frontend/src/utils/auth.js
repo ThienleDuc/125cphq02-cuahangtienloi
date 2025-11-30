@@ -18,8 +18,8 @@ export function handleLogin(email, password) {
 
   // ---- LOGIN (fake database) ----
   const user = dataNguoiDung.find(u =>
-    String(u[2]).trim().toLowerCase() === email.trim().toLowerCase() &&
-    String(u[3]).trim() === password.trim()
+    u.email.trim() === email.trim().toLowerCase() &&
+    u._password.trim() === password.trim() 
   );
 
   if (!user) {
@@ -31,7 +31,7 @@ export function handleLogin(email, password) {
   }
 
   // ---- KIỂM TRA TRẠNG THÁI ----
-  if (user[4] !== "Hoạt động") {
+  if (user.status !== "Hoạt động") {
     return {
       success: false,
       message: "Tài khoản đã bị khóa",
@@ -41,16 +41,13 @@ export function handleLogin(email, password) {
 
   // ---- TẠO OBJECT USER TRẢ VỀ ----
   const userObj = {
-    id: user[0],
-    name: user[1],
-    email: user[2],
-    role: user[6],      // tên role (chuỗi)
-    status: user[4],
-    avatar: user[5] || ""
+    id: user.id,
+    name: user.name,
+    email: user.email,
+    role: user.role?.name || "",      // role có thể là object hoặc string
+    status: user.status,
+    avatar: user.avatar || "" // avatar theo getter
   };
-
-  // ---- KHÔNG LƯU SESSION TẠI ĐÂY ----
-  // Lưu session sẽ được thực hiện trong component login qua SessionContext
 
   return {
     success: true,

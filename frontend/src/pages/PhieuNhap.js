@@ -1,181 +1,207 @@
 // src/pages/PhieuNhap.jsx
-import React, { useState, useMemo } from "react";
+import React, { useState, useEffect, useMemo } from "react";
 import TableComponent from "../components/TableComponent";
 import SelectWithScroll from "../components/SelectWithScroll";
 import { Link } from "react-router-dom";
-import { dataPhieuNhap } from "../data/dataPhieuNhap";
-import { dataNhaCungCap } from "../data/dataNhaCungCap";
-import { dataNguoiDung } from "../data/dataNguoiDung";
 import { useSession } from "../contexts/SessionContext";
 import { getRoleFlags } from "../utils/roleCheck";
+import { getReceiptsByFilter, getReceiptById } from "../data/dataPhieuNhap";
+import { dataNhaCungCap } from "../data/dataNhaCungCap";
+import { dataNguoiDung } from "../data/dataNguoiDung";
+import { FaSquare, FaCheckSquare } from "react-icons/fa";
+import { exportExcel } from "../components/exportExcel";
+
 
 function PhieuNhap() {
-  const [data, setData] = useState(dataPhieuNhap);
-  const [currentRow, setCurrentRow] = useState(null);
-
   const { session } = useSession();
-  const { isQuanLyCuaHang } = getRoleFlags(session?.role);
-  const { isQuanKho } = getRoleFlags(session?.role);
+  const { isQuanLyCuaHang, isQuanKho } = getRoleFlags(session?.role);
 
   // Filter
   const [filterNgay, setFilterNgay] = useState("");
-  const [filterNCC, setFilterNCC] = useState("Tất cả");
-  const [filterNguoiNhap, setFilterNguoiNhap] = useState("Tất cả");
+  const [filterNCC, setFilterNCC] = useState(""); // lưu id
+  const [filterNguoiNhap, setFilterNguoiNhap] = useState(""); // lưu id 
 
-  // Form Thêm
-  const [ngayNhapAdd, setNgayNhapAdd] = useState("");
-  const [nccAdd, setNCCAdd] = useState("");
-  const [nguoiNhapAdd, setNguoiNhapAdd] = useState("");
-  const [tongTienAdd, setTongTienAdd] = useState("");
-
-  // Form Sửa
-  const [ngayNhapEdit, setNgayNhapEdit] = useState("");
+  // Modal state
+  const [currentReceipt, setCurrentReceipt] = useState(null);
+  const [, setNgayEdit] = useState("");
   const [nccEdit, setNCCEdit] = useState("");
-  const [nguoiNhapEdit, setNguoiNhapEdit] = useState("");
-  const [tongTienEdit, setTongTienEdit] = useState("");
+  const [, setNguoiNhapEdit] = useState("");
+  const [, setTongTienEdit] = useState("");
 
-  const columns = ["Mã PN", "Ngày nhập", "Mã NCC", "Nhà cung cấp", "Mã người nhập", "Người nhập", "Tổng tiền", "Tác vụ"];
+  const columns = ["Mã PN", "Ngày nhập", "Nhà cung cấp", "Người nhập", "Tổng tiền", "Tác vụ"];
 
   // Filter dữ liệu
   const filteredData = useMemo(() => {
-    return data.filter(d => {
-      const ngayMatch = !filterNgay || d[1] === filterNgay;
-      const nccMatch = filterNCC === "Tất cả" || d[2] === parseInt(filterNCC);
-      const nguoiNhapMatch = filterNguoiNhap === "Tất cả" || d[4] === parseInt(filterNguoiNhap);
-      const roleMatch = isQuanKho ? d[4] === parseInt(session?.id) : true;
-      return ngayMatch && nccMatch && nguoiNhapMatch && roleMatch;
+    const receipts = getReceiptsByFilter({
+      date: filterNgay,
+      supplierId: filterNCC,
+      createdById: filterNguoiNhap
     });
-  }, [filterNgay, filterNCC, filterNguoiNhap, isQuanKho, session?.id, data]);
 
-  // Thêm mới
-  const handleAdd = () => {
-    if (!ngayNhapAdd || !nccAdd || !nguoiNhapAdd || !tongTienAdd) return;
-    const newId = Math.max(...data.map(d => d[0])) + 1;
-    const nccObj = dataNhaCungCap.find(n => n[0] === parseInt(nccAdd));
-    const nguoiNhapObj = dataNguoiDung.find(n => n[0] === parseInt(nguoiNhapAdd));
-    const newRow = [
-      newId,
-      ngayNhapAdd,
-      parseInt(nccAdd),
-      nccObj ? nccObj[1] : "",
-      parseInt(nguoiNhapAdd),
-      nguoiNhapObj ? nguoiNhapObj[1] : "",
-      parseInt(tongTienAdd)
-    ];
-    setData([...data, newRow]);
-    setNgayNhapAdd(""); setNCCAdd(""); setNguoiNhapAdd(""); setTongTienAdd("");
+    if (isQuanKho) return receipts.filter(r => r.createdBy?.id === session?.id);
+
+    return receipts;
+  }, [filterNgay, filterNCC, filterNguoiNhap, session?.id, isQuanKho]);
+
+  // Khi mở modal
+  useEffect(() => {
+    const editModalEl = document.getElementById("editModal");
+    const deleteModalEl = document.getElementById("deleteModal");
+
+    const handleShow = (event) => {
+      const button = event.relatedTarget;
+      const receiptId = button.getAttribute("data-receipt-id");
+      if (!receiptId) return;
+      const receipt = getReceiptById(receiptId);
+      if (!receipt) return;
+
+      if (button.dataset.bsTarget === "#editModal") {
+        setCurrentReceipt(receipt);
+        setNgayEdit(receipt.date);
+        setNCCEdit(receipt.supplier?.id || "");
+        setNguoiNhapEdit(receipt.createdBy?.id || "");
+        setTongTienEdit(receipt.totalAmount);
+      } else if (button.dataset.bsTarget === "#deleteModal") {
+        setCurrentReceipt(receipt);
+      }
+    };
+
+    if (editModalEl) editModalEl.addEventListener("show.bs.modal", handleShow);
+    if (deleteModalEl) deleteModalEl.addEventListener("show.bs.modal", handleShow);
+
+    return () => {
+      if (editModalEl) editModalEl.removeEventListener("show.bs.modal", handleShow);
+      if (deleteModalEl) deleteModalEl.removeEventListener("show.bs.modal", handleShow);
+    };
+  }, []);
+
+  // state quản lý checkbox cho từng phiếu nhập
+  const [checkedMap, setCheckedMap] = useState({});
+
+  // state checkbox "Chọn tất cả"
+  const [checkAll, setCheckAll] = useState(false);
+
+  // toggle từng checkbox
+  const toggleChecked = (id) => {
+    setCheckedMap(prev => {
+      const newChecked = { ...prev, [id]: !prev[id] };
+      // Nếu bỏ 1 trong số các checkbox, bỏ tick checkAll
+      if (!newChecked[id]) setCheckAll(false);
+      return newChecked;
+    });
   };
 
-  // Sửa
-  const handleSave = () => {
-    if (!currentRow) return;
-    const nccObj = dataNhaCungCap.find(n => n[0] === parseInt(nccEdit));
-    const nguoiNhapObj = dataNguoiDung.find(n => n[0] === parseInt(nguoiNhapEdit));
-    const updatedData = data.map(d =>
-      d[0] === currentRow[0]
-        ? [
-            d[0],
-            ngayNhapEdit,
-            parseInt(nccEdit),
-            nccObj ? nccObj[1] : "",
-            parseInt(nguoiNhapEdit),
-            nguoiNhapObj ? nguoiNhapObj[1] : "",
-            parseInt(tongTienEdit)
-          ]
-        : d
-    );
-    setData(updatedData);
-    setCurrentRow(null);
+  // toggle checkbox "Chọn tất cả"
+  const toggleCheckAll = () => {
+    const newCheckAll = !checkAll;
+    setCheckAll(newCheckAll);
+
+    const newCheckedMap = {};
+    filteredData.forEach(r => {
+      newCheckedMap[r.id] = newCheckAll;
+    });
+    setCheckedMap(newCheckedMap);
   };
 
-  // Xóa
-  const handleDelete = () => {
-    if (!currentRow) return;
-    setData(data.filter(d => d[0] !== currentRow[0]));
-    setCurrentRow(null);
-  };
+  // tính tổng tiền của các phiếu nhập đã chọn
+  const totalSelectedAmount = filteredData.reduce((sum, r) => {
+    return checkedMap[r.id] ? sum + r.totalAmount : sum;
+  }, 0);
 
-  // Click Edit
-  const handleEditClick = (row) => {
-    setCurrentRow(row);
-    setNgayNhapEdit(row[1]);
-    setNCCEdit(row[2].toString());
-    setNguoiNhapEdit(row[4].toString());
-    setTongTienEdit(row[6].toString());
+  const handleExportExcel = () => {
+    // Lấy các phiếu nhập đã chọn
+    const selectedData = filteredData
+      .filter(r => checkedMap[r.id])
+      .map(r => ({
+        "Mã PN": r.id,
+        "Ngày nhập": r.date,
+        "Nhà cung cấp": r.supplier?.name || "",
+        "Người nhập": r.createdBy?.name || "",
+        "Tổng tiền": r.totalAmount + " " + r.unit
+      }));
+
+    if (selectedData.length === 0) {
+      alert("Vui lòng chọn ít nhất 1 phiếu nhập để xuất Excel!");
+      return;
+    }
+
+    exportExcel(selectedData, [], `PhieuNhap_${Date.now()}.xlsx`);
   };
 
   return (
     <div className="container-fluid px-4">
       <h1 className="mt-4">Phiếu Nhập</h1>
+
       <div className="d-flex justify-content-between align-items-center mb-3">
         <p className="mb-0">Bảng dưới đây hiển thị các phiếu nhập hàng.</p>
-        <button
-          className="btn btn-success"
-          data-bs-toggle="modal"
-          data-bs-target="#addModal"
-          onClick={() => { setNgayNhapAdd(""); setNCCAdd(""); setNguoiNhapAdd(""); setTongTienAdd(""); }}
-        >
-          <i className="fas fa-plus me-1"></i> Thêm mới
-        </button>
+        {isQuanLyCuaHang && (
+          <button
+            className="btn btn-success"
+            data-bs-toggle="modal"
+            data-bs-target="#addModal"
+          >
+            <i className="fas fa-plus me-1"></i> Thêm mới
+          </button>
+        )}
       </div>
 
-      {/* Bộ lọc */}
+      {/* Filter */}
       <div className="row g-3 mb-3">
         <div className="col-md-3">
           <label className="form-label">Ngày nhập</label>
-          <input type="date" className="form-control" value={filterNgay} onChange={e => setFilterNgay(e.target.value)} />
+          <input
+            type="date"
+            className="form-control"
+            value={filterNgay}
+            onChange={e => setFilterNgay(e.target.value)}
+          />
         </div>
+
         <div className="col-md-3">
           <label className="form-label">Nhà cung cấp</label>
           <SelectWithScroll
-            options={["Tất cả", ...dataNhaCungCap.map(n => n[1])]}
-            value={filterNCC === "Tất cả" ? "Tất cả" : dataNhaCungCap.find(n => n[0] === parseInt(filterNCC))?.[1]}
-            onChange={val => { 
-              if(val === "Tất cả") setFilterNCC("Tất cả");
-              else { const n = dataNhaCungCap.find(n => n[1] === val); setFilterNCC(n ? n[0].toString() : ""); }
-            }}
+            options={["Tất cả", ...dataNhaCungCap.map(n => `${n.id}: ${n.name}`)]}
+            value={filterNCC === "" ? "Tất cả" : `${filterNCC}: ${dataNhaCungCap.find(n => n.id === filterNCC)?.name}`}
+            onChange={val => setFilterNCC(val === "Tất cả" ? "" : val.split(":")[0])}
           />
         </div>
+
         {isQuanLyCuaHang && (
           <div className="col-md-3">
             <label className="form-label">Người nhập</label>
             <SelectWithScroll
-              options={["Tất cả", ...dataNguoiDung.map(n => n[1])]}
-              value={filterNguoiNhap === "Tất cả" ? "Tất cả" : dataNguoiDung.find(n => n[0] === parseInt(filterNguoiNhap))?.[1]}
-              onChange={val => {
-                if(val === "Tất cả") setFilterNguoiNhap("Tất cả");
-                else { const nd = dataNguoiDung.find(n => n[1] === val); setFilterNguoiNhap(nd ? nd[0].toString() : ""); }
-              }}
+              options={["Tất cả", ...dataNguoiDung.map(u => `${u.id}: ${u.name}`)]} 
+              value={filterNguoiNhap === "" ? "Tất cả" : `${filterNguoiNhap}: ${dataNguoiDung.find(u => u.id === filterNguoiNhap)?.name}`}
+              onChange={val => setFilterNguoiNhap(val === "Tất cả" ? "" : val.split(":")[0])}
             />
           </div>
         )}
       </div>
 
+      {/* Table */}
       <TableComponent
         title="Danh sách Phiếu Nhập"
         columns={columns}
-        hiddenColumns={[2, 4]}
-        data={filteredData.map(row => [
-          row[0], // Mã PN
-          row[1], // Ngày nhập
-          row[2], // Mã NCC
-          row[3], // Tên NCC
-          row[4], // Mã người nhập
-          row[5], // Người nhập
-          row[6].toLocaleString("vi-VN") + " VNĐ"
+        data={filteredData.map(r => [
+          r.id,
+          r.date,
+          r.supplier?.name || "",
+          r.createdBy?.name || "",
+          `${r.totalAmount} ${r.unit} `
         ])}
         renderCell={(cell, column, row) => {
           if (column === "Tác vụ") {
+            const isChecked = checkedMap[row[0]] || false;
             return (
-              <td>
-                <Link to={`/phieu-nhap/${row[0]}`} className="btn btn-info btn-sm me-1">
+              <td className="d-flex gap-1">
+                <Link to={`/phieu-nhap/${row[0]}`} className="btn btn-info btn-sm">
                   <i className="fas fa-search"></i>
                 </Link>
                 <button
-                  className="btn btn-primary btn-sm me-1"
+                  className="btn btn-primary btn-sm"
                   data-bs-toggle="modal"
                   data-bs-target="#editModal"
-                  onClick={() => handleEditClick(row)}
+                  data-receipt-id={row[0]}
                 >
                   <i className="fas fa-edit"></i>
                 </button>
@@ -183,16 +209,54 @@ function PhieuNhap() {
                   className="btn btn-danger btn-sm"
                   data-bs-toggle="modal"
                   data-bs-target="#deleteModal"
-                  onClick={() => setCurrentRow(row)}
+                  data-receipt-id={row[0]}
                 >
                   <i className="fas fa-trash-alt"></i>
                 </button>
+                <span className="d-flex align-items-center"
+                  style={{
+                    cursor: "pointer",
+                    fontSize: "1rem", // tương đương chiều cao ~16px, có thể tăng nếu muốn
+                    width: "30px",
+                    height: "31px",
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    color: isChecked ? "#28a745" : "#6c757d",
+                    transition: "color 0.2s"
+                  }}
+                  onClick={() => toggleChecked(row[0])}
+                  title={isChecked ? "Đã chọn" : "Chưa chọn"}
+                  >
+                  {isChecked ? <FaCheckSquare size={18} /> : <FaSquare size={18} />}
+                </span>
               </td>
             );
           }
           return <td>{cell}</td>;
         }}
       />
+      <div className="d-flex justify-content-between align-items-center mt-2">
+        <div>
+          <input
+            type="checkbox"
+            checked={checkAll}
+            onChange={toggleCheckAll}
+            id="checkAll"
+            className="form-check-input me-2"
+          />
+          <label htmlFor="checkAll" className="form-check-label">Chọn tất cả</label>
+        </div>
+        <div className="d-flex gap-2 align-items-center"> 
+          <strong>Tổng tiền đã chọn: </strong> {totalSelectedAmount} VNĐ
+          <button
+            className="btn btn-sm btn-outline-success"
+            onClick={handleExportExcel}
+          >
+            <i className="fas fa-file-excel me-1"></i> Xuất Excel
+          </button>
+        </div>
+      </div>
 
       {/* Modal Thêm */}
       <div className="modal fade" id="addModal" tabIndex="-1">
@@ -206,15 +270,15 @@ function PhieuNhap() {
               <div className="mb-3">
                 <label className="form-label">Nhà cung cấp</label>
                 <SelectWithScroll
-                  options={dataNhaCungCap.map(n => n[1])}
-                  value={nccAdd ? dataNhaCungCap.find(n => n[0] === parseInt(nccAdd))?.[1] : ""}
-                  onChange={val => { const n = dataNhaCungCap.find(n => n[1] === val); setNCCAdd(n ? n[0].toString() : ""); }}
+                  options={["Tất cả", ...dataNhaCungCap.map(n => `${n.id}: ${n.name}`)]}
+                  value={nccEdit ? `${nccEdit}: ${dataNhaCungCap.find(n => n.id === nccEdit)?.name}` : "Tất cả"}
+                  onChange={val => setNCCEdit(val === "Tất cả" ? "" : val.split(":")[0])}
                 />
               </div>
             </div>
             <div className="modal-footer">
               <button className="btn btn-secondary" data-bs-dismiss="modal">Hủy</button>
-              <button className="btn btn-success" data-bs-dismiss="modal" onClick={handleAdd}>Thêm mới</button>
+              <button className="btn btn-success" data-bs-dismiss="modal">Thêm mới</button>
             </div>
           </div>
         </div>
@@ -229,18 +293,22 @@ function PhieuNhap() {
               <button type="button" className="btn-close" data-bs-dismiss="modal"></button>
             </div>
             <div className="modal-body">
-              <div className="mb-3">
-                <label className="form-label">Nhà cung cấp</label>
-                <SelectWithScroll
-                  options={dataNhaCungCap.map(n => n[1])}
-                  value={nccEdit ? dataNhaCungCap.find(n => n[0] === parseInt(nccEdit))?.[1] : ""}
-                  onChange={val => { const n = dataNhaCungCap.find(n => n[1] === val); setNCCEdit(n ? n[0].toString() : ""); }}
-                />
-              </div>
+              {currentReceipt ? (
+                <>
+                  <div className="mb-3">
+                    <label className="form-label">Nhà cung cấp</label>
+                    <SelectWithScroll
+                      options={[...dataNhaCungCap.map(n => `${n.id}: ${n.name}`)]}
+                      value={nccEdit ? `${nccEdit}: ${dataNhaCungCap.find(n => n.id === nccEdit)?.name}` : ""}
+                      onChange={val => setNCCEdit(val === "" ? "" : val.split(":")[0])}
+                    />
+                  </div>
+                </>
+              ) : <p>Đang tải...</p>}
             </div>
             <div className="modal-footer">
               <button className="btn btn-secondary" data-bs-dismiss="modal">Hủy</button>
-              <button className="btn btn-primary" data-bs-dismiss="modal" onClick={handleSave}>Lưu</button>
+              <button className="btn btn-primary" data-bs-dismiss="modal">Lưu</button>
             </div>
           </div>
         </div>
@@ -254,15 +322,18 @@ function PhieuNhap() {
               <h5 className="modal-title">Xác nhận xóa</h5>
               <button type="button" className="btn-close" data-bs-dismiss="modal"></button>
             </div>
-            <div className="modal-body">Bạn có chắc muốn xóa phiếu nhập này?</div>
+            <div className="modal-body">
+              {currentReceipt ? (
+                <p>Bạn có chắc muốn xóa phiếu nhập <strong>{currentReceipt.id}</strong>?</p>
+              ) : <p>Đang tải...</p>}
+            </div>
             <div className="modal-footer">
               <button className="btn btn-secondary" data-bs-dismiss="modal">Không</button>
-              <button className="btn btn-danger" data-bs-dismiss="modal" onClick={handleDelete}>Có</button>
+              <button className="btn btn-danger" data-bs-dismiss="modal">Có</button>
             </div>
           </div>
         </div>
       </div>
-
     </div>
   );
 }

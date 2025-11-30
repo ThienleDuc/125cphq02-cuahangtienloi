@@ -1,202 +1,168 @@
 // src/pages/PhanCong.jsx
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useMemo } from "react";
 import TableComponent from "../components/TableComponent";
 import SelectWithScroll from "../components/SelectWithScroll";
-
-// Dữ liệu duy nhất, đã bao gồm chi tiết
-import { dataPhanCong } from "../data/dataPhanCong";
+import { useSession } from "../contexts/SessionContext";
 import { dataNguoiDung } from "../data/dataNguoiDung";
 import { dataThoiGianBieu } from "../data/dataThoiGianBieu";
+import { getAssignmentsByFilter, getAssignmentById } from "../data/dataPhanCong";
 
 function PhanCong() {
-  // ====== STATE CHÍNH ======
-  const [phanCongList, setPhanCongList] = useState(dataPhanCong);
-  const [filters, setFilters] = useState({ caLam: "", ngayLam: "" });
-  const [filteredList, setFilteredList] = useState(dataPhanCong);
+  const { session } = useSession();
 
-  // ====== FILTER DATA ======
-  useEffect(() => {
-    setFilteredList(
-      phanCongList.filter(r => {
-        const matchCa = !filters.caLam || r[4] === filters.caLam;   // r[4] = tenCa
-        const matchNgay = !filters.ngayLam || r[5] === filters.ngayLam; // r[5] = ngayLam
-        return matchCa && matchNgay;
-      })
-    );
-  }, [filters, phanCongList]);
+  // Filter
+  const [filterNgay, setFilterNgay] = useState("");
+  const [filterNguoi, setFilterNguoi] = useState("");
+  const [filterCa, setFilterCa] = useState("");
+  const [filterTrangThai, setFilterTrangThai] = useState("");
 
-  // ====== FORM ======
-  const [currentRow, setCurrentRow] = useState(null);
-  const emptyForm = {
-    maNV: "",
-    maCa: "",
-    nhanVien: "",
-    caLam: "",
-    ngayLam: "",
-    trangThai: "Đã phân công",
-    nguoiPhanCong: "",
-    ngayPhanCong: "",
-    ghiChu: ""
-  };
-  const [form, setForm] = useState(emptyForm);
+  // Modal state
+  const [currentAssignment, setCurrentAssignment] = useState(null);
+  const [nguoiEdit, setNguoiEdit] = useState("");
+  const [caEdit, setCaEdit] = useState("");
+  const [ngayEdit, setNgayEdit] = useState("");
+  const [trangThaiEdit, setTrangThaiEdit] = useState("");
 
-  const columns = [
-    "Mã Lịch NV",
-    "Mã NV",
-    "Nhân viên",
-    "Mã Ca",
-    "Ca làm",
-    "Ngày làm",
-    "Giờ bắt đầu",
-    "Giờ kết thúc",
-    "Trạng thái",
-    "Mã gười phân công",
-    "Người phân công",
-    "Ngày phân công",
-    "Ghi chú",
-    "Tác vụ"
-  ];
+  const columns = ["ID", "Ngày làm", "Nhân viên", "Ca", "Trạng thái", "Tác vụ"];
 
-  const openModal = (id) => {
-    new window.bootstrap.Modal(document.getElementById(id)).show();
-  };
-
-  // ====== THÊM ======
-  const handleAdd = () => {
-    const newId = phanCongList.length ? Math.max(...phanCongList.map(r => r[0])) + 1 : 1;
-    const tenNV = dataNguoiDung.find(n => n[0] === form.maNV)?.[1] || "";
-    const ca = dataThoiGianBieu.find(c => c[0] === form.maCa) || [];
-    const tenCa = ca[1] || "";
-    const gioBD = ca[2] || "";
-    const gioKT = ca[3] || "";
-    const tenNguoiPhanCong = dataNguoiDung.find(n => n[0] === form.nguoiPhanCong)?.[1] || "";
-
-    const newRow = [
-      newId,
-      form.maNV,
-      tenNV,
-      form.maCa,
-      tenCa,
-      form.ngayLam,
-      gioBD,
-      gioKT,
-      form.trangThai,
-      tenNguoiPhanCong,
-      form.ngayPhanCong,
-      form.ghiChu || ""
-    ];
-
-    setPhanCongList([...phanCongList, newRow]);
-    setForm(emptyForm);
-  };
-
-  // ====== CHỌN SỬA ======
-  const handleEditClick = (row) => {
-    setCurrentRow(row);
-    setForm({
-      maNV: row[1],
-      maCa: row[3],
-      nhanVien: row[2],
-      caLam: row[4],
-      ngayLam: row[5],
-      trangThai: row[8],
-      nguoiPhanCong: dataNguoiDung.find(n => n[1] === row[9])?.[0] || "",
-      ngayPhanCong: row[10],
-      ghiChu: row[11]
+  // Filter dữ liệu
+  const filteredData = useMemo(() => {
+    const assignments = getAssignmentsByFilter({
+      userId: filterNguoi,
+      shiftId: filterCa,
+      workDate: filterNgay,
+      status: filterTrangThai,
+      assignedById: session.id
     });
-    openModal("editModal");
-  };
 
-  // ====== LƯU SỬA ======
-  const handleSaveEdit = () => {
-    const tenNV = dataNguoiDung.find(n => n[0] === form.maNV)?.[1] || "";
-    const ca = dataThoiGianBieu.find(c => c[0] === form.maCa) || [];
-    const tenCa = ca[1] || "";
-    const gioBD = ca[2] || "";
-    const gioKT = ca[3] || "";
-    const tenNguoiPhanCong = dataNguoiDung.find(n => n[0] === form.nguoiPhanCong)?.[1] || "";
+    return assignments;
+  }, [filterNguoi, filterCa, filterNgay, filterTrangThai, session.id]);
 
-    setPhanCongList(
-      phanCongList.map(r =>
-        r[0] === currentRow[0]
-          ? [
-              r[0],
-              form.maNV,
-              tenNV,
-              form.maCa,
-              tenCa,
-              form.ngayLam,
-              gioBD,
-              gioKT,
-              form.trangThai,
-              tenNguoiPhanCong,
-              form.ngayPhanCong,
-              form.ghiChu || ""
-            ]
-          : r
-      )
-    );
-  };
+  // Modal
+  useEffect(() => {
+    const editModalEl = document.getElementById("editModal");
+    const deleteModalEl = document.getElementById("deleteModal");
+    const addModalEl = document.getElementById("addModal");
 
-  // ====== XOÁ ======
-  const handleDeleteClick = (row) => {
-    setCurrentRow(row);
-    openModal("deleteModal");
-  };
+    const handleShow = (event) => {
+      const button = event.relatedTarget;
+      const id = button.getAttribute("data-id");
+      if (!id && button.dataset.bsTarget !== "#addModal") return;
+      const assignment = id ? getAssignmentById(id) : null;
 
-  const handleConfirmDelete = () => {
-    setPhanCongList(phanCongList.filter(r => r[0] !== currentRow[0]));
-  };
+      if (button.dataset.bsTarget === "#editModal" && assignment) {
+        setCurrentAssignment(assignment);
+        setNguoiEdit(String(assignment.user?.id || ""));
+        setCaEdit(String(assignment.shift?.id || ""));
+        setNgayEdit(assignment.workDate || "");
+        setTrangThaiEdit(assignment.status || "");
+      } else if (button.dataset.bsTarget === "#deleteModal" && assignment) {
+        setCurrentAssignment(assignment);
+      } else if (button.dataset.bsTarget === "#addModal") {
+        setCurrentAssignment(null);
+        setNguoiEdit("");
+        setCaEdit("");
+        setNgayEdit("");
+        setTrangThaiEdit("");
+      }
+    };
 
-  // ============================================
-  // =============== RENDER =====================
-  // ============================================
+    if (editModalEl) editModalEl.addEventListener("show.bs.modal", handleShow);
+    if (deleteModalEl) deleteModalEl.addEventListener("show.bs.modal", handleShow);
+    if (addModalEl) addModalEl.addEventListener("show.bs.modal", handleShow);
+
+    return () => {
+      if (editModalEl) editModalEl.removeEventListener("show.bs.modal", handleShow);
+      if (deleteModalEl) deleteModalEl.removeEventListener("show.bs.modal", handleShow);
+      if (addModalEl) addModalEl.removeEventListener("show.bs.modal", handleShow);
+    };
+  }, []);
+
+  // Helper function
+  const getNguoiName = (id) => dataNguoiDung.find(u => u.id === id)?.name || "";
+  const getCaName = (id) => dataThoiGianBieu.find(c => c.id === id)?.name || "";
 
   return (
     <div className="container-fluid px-4">
-      <h1 className="mt-4">Phân công nhân viên</h1>
+      <h1 className="mt-4">Phân Công</h1>
 
       <div className="d-flex justify-content-between align-items-center mb-3">
-        <p className="mb-0">Danh sách phân công ca làm việc.</p>
-        <button className="btn btn-success" data-bs-toggle="modal" data-bs-target="#addModal">
+        <p className="mb-0">Danh sách phân công nhân viên.</p>
+        <button
+          className="btn btn-success"
+          data-bs-toggle="modal"
+          data-bs-target="#addModal"
+        >
           <i className="fas fa-plus me-1"></i> Thêm mới
         </button>
       </div>
 
-      {/* FILTER */}
-      <div className="row mb-3 g-3">
+      {/* Filter */}
+      <div className="row g-3 mb-3">
         <div className="col-md-3">
-          <label className="form-label">Ca làm</label>
-          <SelectWithScroll
-            options={dataThoiGianBieu.map(c => `${c[0]}: ${c[1]}`)}
-            value={filters.caLam ? `${dataThoiGianBieu.find(c => c[1] === filters.caLam)?.[0]}: ${filters.caLam}` : ""}
-            onChange={val => {
-              if (!val) return setFilters({...filters, caLam: ""});
-              const ca = val.split(":")[1].trim();
-              setFilters({...filters, caLam: ca});
-            }}
+          <label className="form-label">Ngày làm</label>
+          <input
+            type="date"
+            className="form-control"
+            value={filterNgay}
+            onChange={e => setFilterNgay(e.target.value)}
           />
         </div>
         <div className="col-md-3">
-          <label className="form-label">Ngày làm</label>
-          <input type="date" className="form-control" value={filters.ngayLam} onChange={e => setFilters({...filters, ngayLam: e.target.value})}/>
+          <label className="form-label">Nhân viên</label>
+          <SelectWithScroll
+            options={["Tất cả", ...dataNguoiDung.map(u => `${u.id}: ${u.name}`)]}
+            value={filterNguoi === "" ? "Tất cả" : `${filterNguoi}: ${getNguoiName(filterNguoi)}`}
+            onChange={val => setFilterNguoi(val === "Tất cả" ? "" : val.split(":")[0])}
+          />
+        </div>
+        <div className="col-md-3">
+          <label className="form-label">Ca</label>
+          <SelectWithScroll
+            options={["Tất cả", ...dataThoiGianBieu.map(c => `${c.id}: ${c.name}`)]}
+            value={filterCa === "" ? "Tất cả" : `${filterCa}: ${getCaName(filterCa)}`}
+            onChange={val => setFilterCa(val === "Tất cả" ? "" : val.split(":")[0])}
+          />
+        </div>
+        <div className="col-md-3">
+          <label className="form-label">Trạng thái</label>
+          <SelectWithScroll
+            options={["Tất cả", "Đã phân công", "Hoàn thành", "Vắng"]}
+            value={filterTrangThai || "Tất cả"}
+            onChange={val => setFilterTrangThai(val === "Tất cả" ? "" : val)}
+          />
         </div>
       </div>
 
-      {/* TABLE */}
+      {/* Table */}
       <TableComponent
-        title="Danh sách phân công"
+        title="Danh sách Phân Công"
         columns={columns}
-        hiddenColumns={[0, 1, 3, 9, 11]} 
-        data={filteredList}
+        data={filteredData.map(a => [
+          a.id,
+          a.workDate || "",
+          getNguoiName(a.user?.id),
+          getCaName(a.shift?.id),
+          a.status || ""
+        ])}
         renderCell={(cell, column, row) => {
           if (column === "Tác vụ") {
             return (
-              <td>
-                <button className="btn btn-primary btn-sm me-1" onClick={() => handleEditClick(row)}>
+              <td className="d-flex gap-1">
+                <button
+                  className="btn btn-primary btn-sm"
+                  data-bs-toggle="modal"
+                  data-bs-target="#editModal"
+                  data-id={row[0]}
+                >
                   <i className="fas fa-edit"></i>
                 </button>
-                <button className="btn btn-danger btn-sm" onClick={() => handleDeleteClick(row)}>
+                <button
+                  className="btn btn-danger btn-sm"
+                  data-bs-toggle="modal"
+                  data-bs-target="#deleteModal"
+                  data-id={row[0]}
+                >
                   <i className="fas fa-trash-alt"></i>
                 </button>
               </td>
@@ -206,142 +172,122 @@ function PhanCong() {
         }}
       />
 
-      {/* =================== MODAL THÊM =================== */}
+      {/* Modal Thêm */}
       <div className="modal fade" id="addModal" tabIndex="-1">
-        <div className="modal-dialog modal-lg">
+        <div className="modal-dialog">
           <div className="modal-content">
             <div className="modal-header">
-              <h5 className="modal-title">Thêm phân công</h5>
-              <button className="btn-close" data-bs-dismiss="modal"></button>
+              <h5 className="modal-title">Thêm Phân Công</h5>
+              <button type="button" className="btn-close" data-bs-dismiss="modal"></button>
             </div>
             <div className="modal-body">
-              <div className="row g-3">
-                <div className="col-md-6">
-                  <label className="form-label">Nhân viên</label>
-                  <SelectWithScroll
-                    options={dataNguoiDung.map(n => `${n[0]}: ${n[1]}`)}
-                    value={form.maNV ? `${form.maNV}: ${form.nhanVien}` : ""}
-                    onChange={val => {
-                      if (!val) return setForm({...form, maNV: "", nhanVien: ""});
-                      const [ma, ten] = val.split(":");
-                      setForm({...form, maNV: parseInt(ma), nhanVien: ten.trim()});
-                    }}
-                  />
-                </div>
-                <div className="col-md-6">
-                  <label className="form-label">Ca làm</label>
-                  <SelectWithScroll
-                    options={dataThoiGianBieu.map(c => `${c[0]}: ${c[1]}`)}
-                    value={form.maCa ? `${form.maCa}: ${form.caLam}` : ""}
-                    onChange={val => {
-                      if (!val) return setForm({...form, maCa: "", caLam: ""});
-                      const [ma, ten] = val.split(":");
-                      setForm({...form, maCa: parseInt(ma), caLam: ten.trim()});
-                    }}
-                  />
-                </div>
-                <div className="col-md-6">
-                  <label className="form-label">Ngày làm</label>
-                  <input type="date" className="form-control" value={form.ngayLam} onChange={e => setForm({...form, ngayLam: e.target.value})}/>
-                </div>
-                <div className="col-md-6">
-                  <label className="form-label">Trạng thái</label>
-                  <select className="form-select" value={form.trangThai} onChange={e => setForm({...form, trangThai: e.target.value})}>
-                    <option>Đã phân công</option>
-                    <option>Hoàn thành</option>
-                    <option>Vắng</option>
-                  </select>
-                </div>
-                <div className="col-md-12">
-                  <label className="form-label">Ghi chú</label>
-                  <textarea className="form-control" value={form.ghiChu} onChange={e => setForm({...form, ghiChu: e.target.value})}></textarea>
-                </div>
+              <div className="mb-3">
+                <label className="form-label">Nhân viên</label>
+                <SelectWithScroll
+                  options={dataNguoiDung.map(u => `${u.id}: ${u.name}`)}
+                  value={nguoiEdit ? `${nguoiEdit}: ${getNguoiName(nguoiEdit)}` : ""}
+                  onChange={val => setNguoiEdit(val.split(":")[0])}
+                />
+              </div>
+              <div className="mb-3">
+                <label className="form-label">Ca</label>
+                <SelectWithScroll
+                  options={dataThoiGianBieu.map(c => `${c.id}: ${c.name}`)}
+                  value={caEdit ? `${caEdit}: ${getCaName(caEdit)}` : ""}
+                  onChange={val => setCaEdit(val.split(":")[0])}
+                />
+              </div>
+              <div className="mb-3">
+                <label className="form-label">Ngày làm</label>
+                <input type="date" className="form-control" value={ngayEdit} onChange={e => setNgayEdit(e.target.value)} />
+              </div>
+              <div className="mb-3">
+                <label className="form-label">Trạng thái</label>
+                <SelectWithScroll
+                  options={["Đã phân công", "Hoàn thành", "Vắng"]}
+                  value={trangThaiEdit}
+                  onChange={val => setTrangThaiEdit(val)}
+                />
               </div>
             </div>
             <div className="modal-footer">
-              <button className="btn btn-secondary" data-bs-dismiss="modal">Hủy</button>
-              <button className="btn btn-success" data-bs-dismiss="modal" onClick={handleAdd}>Thêm</button>
+              <button type="button" className="btn btn-secondary" data-bs-dismiss="modal">Hủy</button>
+              <button type="button" className="btn btn-primary">Lưu</button>
             </div>
           </div>
         </div>
       </div>
 
-      {/* =================== MODAL SỬA =================== */}
+      {/* Modal Sửa */}
       <div className="modal fade" id="editModal" tabIndex="-1">
-        <div className="modal-dialog modal-lg">
+        <div className="modal-dialog">
           <div className="modal-content">
             <div className="modal-header">
-              <h5 className="modal-title">Sửa phân công</h5>
-              <button className="btn-close" data-bs-dismiss="modal"></button>
+              <h5 className="modal-title">Sửa Phân Công</h5>
+              <button type="button" className="btn-close" data-bs-dismiss="modal"></button>
             </div>
             <div className="modal-body">
-              <div className="row g-3">
-                <div className="col-md-6">
-                  <label className="form-label">Nhân viên</label>
-                  <SelectWithScroll
-                    options={dataNguoiDung.map(n => `${n[0]}: ${n[1]}`)}
-                    value={form.maNV ? `${form.maNV}: ${form.nhanVien}` : ""}
-                    onChange={val => {
-                      if (!val) return setForm({...form, maNV: "", nhanVien: ""});
-                      const [ma, ten] = val.split(":");
-                      setForm({...form, maNV: parseInt(ma), nhanVien: ten.trim()});
-                    }}
-                  />
-                </div>
-                <div className="col-md-6">
-                  <label className="form-label">Ca làm</label>
-                  <SelectWithScroll
-                    options={dataThoiGianBieu.map(c => `${c[0]}: ${c[1]}`)}
-                    value={form.maCa ? `${form.maCa}: ${form.caLam}` : ""}
-                    onChange={val => {
-                      if (!val) return setForm({...form, maCa: "", caLam: ""});
-                      const [ma, ten] = val.split(":");
-                      setForm({...form, maCa: parseInt(ma), caLam: ten.trim()});
-                    }}
-                  />
-                </div>
-                <div className="col-md-6">
-                  <label className="form-label">Ngày làm</label>
-                  <input type="date" className="form-control" value={form.ngayLam} onChange={e => setForm({...form, ngayLam: e.target.value})}/>
-                </div>
-                <div className="col-md-6">
-                  <label className="form-label">Trạng thái</label>
-                  <select className="form-select" value={form.trangThai} onChange={e => setForm({...form, trangThai: e.target.value})}>
-                    <option>Đã phân công</option>
-                    <option>Hoàn thành</option>
-                    <option>Vắng</option>
-                  </select>
-                </div>
-                <div className="col-md-12">
-                  <label className="form-label">Ghi chú</label>
-                  <textarea className="form-control" value={form.ghiChu} onChange={e => setForm({...form, ghiChu: e.target.value})}></textarea>
-                </div>
+              <div className="mb-3">
+                <label className="form-label">Nhân viên</label>
+                <SelectWithScroll
+                  options={dataNguoiDung.map(u => `${u.id}: ${u.name}`)}
+                  value={nguoiEdit ? `${nguoiEdit}: ${getNguoiName(nguoiEdit)}` : ""}
+                  onChange={val => setNguoiEdit(val.split(":")[0])}
+                />
+              </div>
+              <div className="mb-3">
+                <label className="form-label">Ca</label>
+                <SelectWithScroll
+                  options={dataThoiGianBieu.map(c => `${c.id}: ${c.name}`)}
+                  value={caEdit ? `${caEdit}: ${getCaName(caEdit)}` : ""}
+                  onChange={val => setCaEdit(val.split(":")[0])}
+                />
+              </div>
+              <div className="mb-3">
+                <label className="form-label">Ngày làm</label>
+                <input type="date" className="form-control" value={ngayEdit} onChange={e => setNgayEdit(e.target.value)} />
+              </div>
+              <div className="mb-3">
+                <label className="form-label">Trạng thái</label>
+                <SelectWithScroll
+                  options={["Đã phân công", "Hoàn thành", "Vắng"]}
+                  value={trangThaiEdit}
+                  onChange={val => setTrangThaiEdit(val)}
+                />
               </div>
             </div>
             <div className="modal-footer">
-              <button className="btn btn-secondary" data-bs-dismiss="modal">Hủy</button>
-              <button className="btn btn-primary" data-bs-dismiss="modal" onClick={handleSaveEdit}>Lưu</button>
+              <button type="button" className="btn btn-secondary" data-bs-dismiss="modal">Hủy</button>
+              <button type="button" className="btn btn-primary">Lưu</button>
             </div>
           </div>
         </div>
       </div>
 
-      {/* =================== MODAL XOÁ =================== */}
+      {/* Modal Xóa */}
       <div className="modal fade" id="deleteModal" tabIndex="-1">
         <div className="modal-dialog modal-sm">
           <div className="modal-content">
             <div className="modal-header">
-              <h5 className="modal-title">Xác nhận xóa</h5>
-              <button className="btn-close" data-bs-dismiss="modal"></button>
+              <h5 className="modal-title">Xóa Phân Công</h5>
+              <button type="button" className="btn-close" data-bs-dismiss="modal"></button>
             </div>
-            <div className="modal-body">Bạn có chắc muốn xóa bản ghi này?</div>
+            <div className="modal-body">
+              Bạn có chắc muốn xóa phân công này không?
+              <div className="mt-2">
+                <strong>ID: </strong> {currentAssignment?.id}<br/>
+                <strong>Nhân viên: </strong> {getNguoiName(currentAssignment?.user?.id)}<br/>
+                <strong>Ca: </strong> {getCaName(currentAssignment?.shift?.id)}
+              </div>
+            </div>
             <div className="modal-footer">
-              <button className="btn btn-secondary" data-bs-dismiss="modal">Không</button>
-              <button className="btn btn-danger" data-bs-dismiss="modal" onClick={handleConfirmDelete}>Có</button>
+              <button type="button" className="btn btn-secondary" data-bs-dismiss="modal">Hủy</button>
+              <button type="button" className="btn btn-danger">Xóa</button>
             </div>
           </div>
         </div>
       </div>
+
     </div>
   );
 }

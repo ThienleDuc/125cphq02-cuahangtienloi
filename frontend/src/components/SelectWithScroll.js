@@ -11,7 +11,7 @@ function SelectWithScroll({ options, value, onChange }) {
   return (
     <Select
       options={formattedOptions}
-      value={selectedOption}  // nếu tìm thấy thì chọn, nếu không thì null
+      value={selectedOption}
       onChange={(selected) => onChange(selected ? selected.value : "")}
       placeholder="-- Chọn --"
       isSearchable

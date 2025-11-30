@@ -10,8 +10,6 @@ function Sidebar() {
 
   const { session } = useSession();
   const userRole = session?.role || "";
-  const userName = session?.name || "Guest";
-
   const flags = getRoleFlags(userRole);
 
   // Tạo menu riêng theo role
@@ -20,7 +18,6 @@ function Sidebar() {
       { path: "/nguoi-dung", label: "Người dùng", icon: "fas fa-users" },
       { path: "/vai-tro", label: "Vai trò", icon: "fas fa-id-badge" },
       { path: "/quyen-han", label: "Quyền hạn", icon: "fas fa-lock" },
-      { path: "/vai-tro-quyen-han", label: "Vai trò & Quyền hạn", icon: "fas fa-user-shield" },
     ],
     isQuanLyCuaHang: [
       { path: "/nguoi-dung", label: "Nhân viên", icon: "fas fa-user-friends" },
@@ -87,7 +84,7 @@ function Sidebar() {
         </div>
         <div className="sb-sidenav-footer">
           <div className="small">Logged in as:</div>
-          {userName}
+          {userRole}
         </div>
       </nav>
     </div>

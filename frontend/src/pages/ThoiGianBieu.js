@@ -1,214 +1,299 @@
-import React, { useState } from "react";
+// src/pages/ThoiGianBieu.jsx
+import React, { useState, useEffect, useMemo } from "react";
 import TableComponent from "../components/TableComponent";
-import { dataThoiGianBieu } from "../data/dataThoiGianBieu";
+import SelectWithScroll from "../components/SelectWithScroll";
+import { getShiftsByFilter, getShiftById } from "../data/dataThoiGianBieu";
 
 function ThoiGianBieu() {
-  const [, setCurrentRow] = useState(null);
+  // --- Filter ---
+  const [filterName, setFilterName] = useState("");
+  const [filterTrangThai, setFilterTrangThai] = useState("");
+
+  // --- Modal state ---
+  const [currentShift, setCurrentShift] = useState(null);
+  const [editName, setEditName] = useState("");
+  const [editStart, setEditStart] = useState("");
+  const [editEnd, setEditEnd] = useState("");
+  const [editTrangThai, setEditTrangThai] = useState("");
+  const [editGhiChu, setEditGhiChu] = useState("");
 
   const columns = [
     "Mã ca",
     "Tên ca",
-    "Giờ bắt đầu",
-    "Giờ kết thúc",
-    "Tổng giờ",
-    "Tiền công/giờ",
-    "Tiền công/ca",
-    "Ngày áp dụng",
+    "Bắt đầu",
+    "Kết thúc",
+    "Số giờ",
+    "Đơn giá",
+    "Tổng tiền",
     "Trạng thái",
-    "Ghi chú",
     "Tác vụ"
   ];
 
-  const [addForm, setAddForm] = useState({
-    tenCa: "",
-    gioBatDau: "",
-    gioKetThuc: "",
-    tienCongGio: "",
-    ngayApDung: "",
-    trangThai: "Hoạt động",
-    ghiChu: ""
-  });
-
-  const [editForm, setEditForm] = useState(addForm);
-
-  const [filter, setFilter] = useState({
-    tenCa: "",
-    trangThai: ""
-  });
-
-  const handleEditClick = (row) => {
-    setCurrentRow(row);
-    setEditForm({
-      tenCa: row[1],
-      gioBatDau: row[2],
-      gioKetThuc: row[3],
-      tienCongGio: row[5],
-      ngayApDung: row[7],
-      trangThai: row[8],
-      ghiChu: row[9]
+  // --- FILTERED DATA ---
+  const filteredData = useMemo(() => {
+    return getShiftsByFilter({
+      name: filterName,
+      trangThai: filterTrangThai
     });
-  };
+  }, [filterName, filterTrangThai]);
 
-  // --- Lọc dữ liệu theo bộ lọc ---
-  const filteredData = dataThoiGianBieu.filter(row => {
-    if (filter.tenCa && !row[1].toLowerCase().includes(filter.tenCa.toLowerCase())) return false;
-    if (filter.trangThai && row[8] !== filter.trangThai) return false;
-    return true;
-  });
+  // Khi mở modal
+  useEffect(() => {
+    const editEl = document.getElementById("editModalShift");
+    const delEl = document.getElementById("deleteModalShift");
+
+    const handleShow = (e) => {
+      const btn = e.relatedTarget;
+      const id = btn?.getAttribute("data-id");
+      if (!id) return;
+
+      const shift = getShiftById(id);
+      setCurrentShift(shift);
+
+      if (btn.dataset.bsTarget === "#editModalShift") {
+        setEditName(shift.name);
+        setEditStart(shift.startTime);
+        setEditEnd(shift.endTime);
+        setEditTrangThai(shift.trangThai);
+        setEditGhiChu(shift.ghiChu);
+      }
+    };
+
+    editEl?.addEventListener("show.bs.modal", handleShow);
+    delEl?.addEventListener("show.bs.modal", handleShow);
+
+    return () => {
+      editEl?.removeEventListener("show.bs.modal", handleShow);
+      delEl?.removeEventListener("show.bs.modal", handleShow);
+    };
+  }, []);
 
   return (
     <div className="container-fluid px-4">
-      <h1 className="mt-4">Thời gian biểu</h1>
+      <h1 className="mt-4">Thời Gian Biểu</h1>
 
       <div className="d-flex justify-content-between align-items-center mb-3">
-        <p className="mb-0">Danh sách ca làm việc của cửa hàng.</p>
-        <button className="btn btn-success" data-bs-toggle="modal" data-bs-target="#addModal">
+        <p className="mb-0">Danh sách các ca làm việc.</p>
+        <button className="btn btn-success" data-bs-toggle="modal" data-bs-target="#addModalShift">
           <i className="fas fa-plus me-1"></i> Thêm mới
         </button>
       </div>
 
-      {/* --- Bộ lọc tìm kiếm --- */}
-        <div className="row g-3 mb-3">
-            <div className="col-md-3">
-                <label className="form-label">Tìm theo tên ca</label>
-                <input
-                type="text"
-                className="form-control"
-                value={filter.tenCa}
-                onChange={(e) => setFilter({ ...filter, tenCa: e.target.value })}
-                placeholder="Nhập tên ca..."
-                />
-            </div>
-            <div className="col-md-2">
-                <label className="form-label">Trạng thái</label>
-                <select
-                className="form-select"
-                value={filter.trangThai}
-                onChange={(e) => setFilter({ ...filter, trangThai: e.target.value })}
-                >
-                <option value="">Tất cả</option>
-                <option value="Hoạt động">Hoạt động</option>
-                <option value="Ngưng hoạt động">Ngưng hoạt động</option>
-                </select>
-            </div>
-            <div className="col-md-7">
-                {/* Có thể thêm bộ lọc khác hoặc để trống */}
-            </div>
+      {/* FILTER */}
+      <div className="row g-3 mb-3">
+        <div className="col-md-4">
+          <label className="form-label">Tên ca</label>
+          <input
+            type="text"
+            className="form-control"
+            placeholder="Nhập tên ca..."
+            value={filterName}
+            onChange={e => setFilterName(e.target.value)}
+          />
         </div>
 
+        <div className="col-md-3">
+          <label className="form-label">Trạng thái</label>
+          <SelectWithScroll
+            options={["Tất cả", "Hoạt động", "Ngưng"]}
+            value={filterTrangThai === "" ? "Tất cả" : filterTrangThai}
+            onChange={val => setFilterTrangThai(val === "Tất cả" ? "" : val)}
+          />
+        </div>
+      </div>
+
+      {/* TABLE */}
       <TableComponent
-        title="Danh sách ca làm"
+        title="Danh sách ca làm việc"
         columns={columns}
-        data={filteredData}
-        renderCell={(cell, column, row) => {
-          if (column === "Tác vụ") return (
-            <td>
-              <button className="btn btn-primary btn-sm me-1" data-bs-toggle="modal" data-bs-target="#editModal" onClick={() => handleEditClick(row)}>
-                <i className="fas fa-edit"></i>
-              </button>
-              <button className="btn btn-danger btn-sm" data-bs-toggle="modal" data-bs-target="#deleteModal" onClick={() => setCurrentRow(row)}>
-                <i className="fas fa-trash-alt"></i>
-              </button>
-            </td>
-          );
+        data={filteredData.map(c => [
+          c.id,
+          c.name,
+          c.startTime,
+          c.endTime,
+          c.soGio,
+          c.donGia,
+          c.tongTien,
+          c.trangThai
+        ])}
+        renderCell={(cell, col, row) => {
+          if (col === "Tác vụ") {
+            const id = row[0];
+            return (
+              <td className="d-flex gap-1">
+                <button
+                  className="btn btn-primary btn-sm"
+                  data-bs-toggle="modal"
+                  data-bs-target="#editModalShift"
+                  data-id={id}
+                >
+                  <i className="fas fa-edit"></i>
+                </button>
+
+                <button
+                  className="btn btn-danger btn-sm"
+                  data-bs-toggle="modal"
+                  data-bs-target="#deleteModalShift"
+                  data-id={id}
+                >
+                  <i className="fas fa-trash-alt"></i>
+                </button>
+              </td>
+            );
+          }
           return <td>{cell}</td>;
         }}
       />
-
-      {/* --- Modal Thêm mới --- */}
-      <div className="modal fade" id="addModal" tabIndex="-1">
+      {/* --- Modal Thêm --- */}
+      <div className="modal fade" id="addModalShift" tabIndex="-1">
         <div className="modal-dialog modal-lg">
           <div className="modal-content">
+
             <div className="modal-header">
-              <h5 className="modal-title">Thêm mới ca làm</h5>
-              <button type="button" className="btn-close" data-bs-dismiss="modal"></button>
+              <h5 className="modal-title">Thêm Ca Làm</h5>
+              <button className="btn-close" data-bs-dismiss="modal"></button>
             </div>
+
             <div className="modal-body">
-              <div className="row g-3">
-                <div className="col-md-6">
-                  <label className="form-label">Tên ca</label>
-                  <input type="text" className="form-control" value={addForm.tenCa} onChange={e => setAddForm({ ...addForm, tenCa: e.target.value })} />
+              <form id="addShiftForm">
+                <div className="row">
+
+                  {/* --------- Cột 1 --------- */}
+                  <div className="col-md-6">
+
+                    <div className="mb-3">
+                      <label className="form-label">Tên ca</label>
+                      <input type="text" className="form-control" name="name" placeholder="Nhập tên ca..." />
+                    </div>
+
+                    <div className="mb-3">
+                      <label className="form-label">Giờ bắt đầu</label>
+                      <input type="time" className="form-control" name="startTime" />
+                    </div>
+
+                    <div className="mb-3">
+                      <label className="form-label">Giờ kết thúc</label>
+                      <input type="time" className="form-control" name="endTime" />
+                    </div>
+
+                    <div className="mb-3">
+                      <label className="form-label">Số giờ</label>
+                      <input type="number" className="form-control" name="soGio" placeholder="Tự động tính" disabled />
+                    </div>
+
+                  </div>
+
+                  {/* --------- Cột 2 --------- */}
+                  <div className="col-md-6">
+
+                    <div className="mb-3">
+                      <label className="form-label">Đơn giá (VND/giờ)</label>
+                      <input type="number" className="form-control" name="donGia" placeholder="Nhập đơn giá..." />
+                    </div>
+
+                    <div className="mb-3">
+                      <label className="form-label">Tổng tiền</label>
+                      <input type="number" className="form-control" name="tongTien" placeholder="Tự động tính" disabled />
+                    </div>
+
+                    <div className="mb-3">
+                      <label className="form-label">Ngày tạo</label>
+                      <input type="date" className="form-control" name="ngayTao" value={new Date().toISOString().slice(0, 10)} />
+                    </div>
+
+                    <div className="mb-3">
+                      <label className="form-label">Trạng thái</label>
+                      <select className="form-control" name="trangThai">
+                        <option value="Hoạt động">Hoạt động</option>
+                        <option value="Ngừng hoạt động">Ngừng hoạt động</option>
+                      </select>
+                    </div>
+
+                  </div>
+
                 </div>
-                <div className="col-md-6">
-                  <label className="form-label">Tiền công/giờ</label>
-                  <input type="number" className="form-control" value={addForm.tienCongGio} onChange={e => setAddForm({ ...addForm, tienCongGio: e.target.value })} />
-                </div>
-                <div className="col-md-6">
-                  <label className="form-label">Giờ bắt đầu</label>
-                  <input type="time" className="form-control" value={addForm.gioBatDau} onChange={e => setAddForm({ ...addForm, gioBatDau: e.target.value })} />
-                </div>
-                <div className="col-md-6">
-                  <label className="form-label">Giờ kết thúc</label>
-                  <input type="time" className="form-control" value={addForm.gioKetThuc} onChange={e => setAddForm({ ...addForm, gioKetThuc: e.target.value })} />
-                </div>
-                <div className="col-md-6">
-                  <label className="form-label">Ngày áp dụng</label>
-                  <input type="date" className="form-control" value={addForm.ngayApDung} onChange={e => setAddForm({ ...addForm, ngayApDung: e.target.value })} />
-                </div>
-                <div className="col-md-6">
-                  <label className="form-label">Trạng thái</label>
-                  <select className="form-select" value={addForm.trangThai} onChange={e => setAddForm({ ...addForm, trangThai: e.target.value })}>
-                    <option>Hoạt động</option>
-                    <option>Ngưng hoạt động</option>
-                  </select>
-                </div>
-                <div className="col-md-12">
+
+                {/* Ghi chú (full width) */}
+                <div className="mb-3">
                   <label className="form-label">Ghi chú</label>
-                  <input type="text" className="form-control" value={addForm.ghiChu} onChange={e => setAddForm({ ...addForm, ghiChu: e.target.value })} />
+                  <textarea className="form-control" name="ghiChu" rows="2"></textarea>
                 </div>
-              </div>
+
+              </form>
             </div>
+
             <div className="modal-footer">
               <button className="btn btn-secondary" data-bs-dismiss="modal">Hủy</button>
               <button className="btn btn-success" data-bs-dismiss="modal">Thêm mới</button>
             </div>
+
           </div>
         </div>
       </div>
 
       {/* --- Modal Sửa --- */}
-      <div className="modal fade" id="editModal" tabIndex="-1">
-        <div className="modal-dialog modal-lg">
+      <div className="modal fade" id="editModalShift" tabIndex="-1">
+        <div className="modal-dialog">
           <div className="modal-content">
             <div className="modal-header">
-              <h5 className="modal-title">Chỉnh sửa ca làm</h5>
-              <button type="button" className="btn-close" data-bs-dismiss="modal"></button>
+              <h5 className="modal-title">Chỉnh sửa Ca Làm</h5>
+              <button className="btn-close" data-bs-dismiss="modal"></button>
             </div>
+
             <div className="modal-body">
-              <div className="row g-3">
-                <div className="col-md-6">
-                  <label className="form-label">Tên ca</label>
-                  <input type="text" className="form-control" value={editForm.tenCa} onChange={e => setEditForm({ ...editForm, tenCa: e.target.value })} />
-                </div>
-                <div className="col-md-6">
-                  <label className="form-label">Tiền công/giờ</label>
-                  <input type="number" className="form-control" value={editForm.tienCongGio} onChange={e => setEditForm({ ...editForm, tienCongGio: e.target.value })} />
-                </div>
-                <div className="col-md-6">
-                  <label className="form-label">Giờ bắt đầu</label>
-                  <input type="time" className="form-control" value={editForm.gioBatDau} onChange={e => setEditForm({ ...editForm, gioBatDau: e.target.value })} />
-                </div>
-                <div className="col-md-6">
-                  <label className="form-label">Giờ kết thúc</label>
-                  <input type="time" className="form-control" value={editForm.gioKetThuc} onChange={e => setEditForm({ ...editForm, gioKetThuc: e.target.value })} />
-                </div>
-                <div className="col-md-6">
-                  <label className="form-label">Ngày áp dụng</label>
-                  <input type="date" className="form-control" value={editForm.ngayApDung} onChange={e => setEditForm({ ...editForm, ngayApDung: e.target.value })} />
-                </div>
-                <div className="col-md-6">
-                  <label className="form-label">Trạng thái</label>
-                  <select className="form-select" value={editForm.trangThai} onChange={e => setEditForm({ ...editForm, trangThai: e.target.value })}>
-                    <option>Hoạt động</option>
-                    <option>Ngưng hoạt động</option>
-                  </select>
-                </div>
-                <div className="col-md-12">
-                  <label className="form-label">Ghi chú</label>
-                  <input type="text" className="form-control" value={editForm.ghiChu} onChange={e => setEditForm({ ...editForm, ghiChu: e.target.value })} />
-                </div>
-              </div>
+              {currentShift ? (
+                <>
+                  <div className="mb-3">
+                    <label className="form-label">Tên ca</label>
+                    <input
+                      className="form-control"
+                      value={editName}
+                      onChange={e => setEditName(e.target.value)}
+                    />
+                  </div>
+
+                  <div className="mb-3">
+                    <label className="form-label">Bắt đầu</label>
+                    <input
+                      type="time"
+                      className="form-control"
+                      value={editStart}
+                      onChange={e => setEditStart(e.target.value)}
+                    />
+                  </div>
+
+                  <div className="mb-3">
+                    <label className="form-label">Kết thúc</label>
+                    <input
+                      type="time"
+                      className="form-control"
+                      value={editEnd}
+                      onChange={e => setEditEnd(e.target.value)}
+                    />
+                  </div>
+
+                  <div className="mb-3">
+                    <label className="form-label">Trạng thái</label>
+                    <SelectWithScroll
+                      options={["Hoạt động", "Ngưng"]}
+                      value={editTrangThai}
+                      onChange={val => setEditTrangThai(val)}
+                    />
+                  </div>
+
+                  <div className="mb-3">
+                    <label className="form-label">Ghi chú</label>
+                    <textarea
+                      className="form-control"
+                      rows="2"
+                      value={editGhiChu}
+                      onChange={e => setEditGhiChu(e.target.value)}
+                    ></textarea>
+                  </div>
+                </>
+              ) : <p>Đang tải...</p>}
             </div>
+
             <div className="modal-footer">
               <button className="btn btn-secondary" data-bs-dismiss="modal">Hủy</button>
               <button className="btn btn-primary" data-bs-dismiss="modal">Lưu</button>
@@ -218,14 +303,20 @@ function ThoiGianBieu() {
       </div>
 
       {/* --- Modal Xóa --- */}
-      <div className="modal fade" id="deleteModal" tabIndex="-1">
+      <div className="modal fade" id="deleteModalShift" tabIndex="-1">
         <div className="modal-dialog modal-sm">
           <div className="modal-content">
             <div className="modal-header">
               <h5 className="modal-title">Xác nhận xóa</h5>
-              <button type="button" className="btn-close" data-bs-dismiss="modal"></button>
+              <button className="btn-close" data-bs-dismiss="modal"></button>
             </div>
-            <div className="modal-body">Bạn có chắc muốn xóa ca làm này?</div>
+
+            <div className="modal-body">
+              {currentShift ? (
+                <p>Bạn có chắc muốn xóa ca <strong>{currentShift.name}</strong>?</p>
+              ) : <p>Đang tải...</p>}
+            </div>
+
             <div className="modal-footer">
               <button className="btn btn-secondary" data-bs-dismiss="modal">Không</button>
               <button className="btn btn-danger" data-bs-dismiss="modal">Có</button>

@@ -1,148 +1,161 @@
 // src/pages/ChiTietPhieuNhap.jsx
-import React, { useState, useEffect, useMemo } from "react";
+import React, { useState, useMemo, useEffect } from "react";
 import { useParams } from "react-router-dom";
 import TableComponent from "../components/TableComponent";
 import SelectWithScroll from "../components/SelectWithScroll";
 import Breadcrumb from "../components/Breadcrumb";
-import { dataChiTietPhieuNhap } from "../data/dataChiTietPhieuNhap";
+import { getPurchaseDetailByPN, getPurchaseDetailFilter } from "../data/dataChiTietPhieuNhap";
 import { dataSanPham } from "../data/dataSanPham";
+import { FaSquare, FaCheckSquare } from "react-icons/fa";
 
-function ChiTietPhieuNhap() {
-  const { maPN } = useParams();
-  const [data, setData] = useState([]);
+export default function ChiTietPhieuNhap() {
+  const { maPN } = useParams(); // Mã phiếu nhập từ URL
+  const pnDisplay = maPN;
+
+  // States riêng cho từng input
+  const [productId, setProductId] = useState("");
+  const [quantity, setQuantity] = useState("");
+  const [unitPrice, setUnitPrice] = useState("");
   const [currentRow, setCurrentRow] = useState(null);
+  const [searchProduct, setSearchProduct] = useState("");
 
-  // Form Thêm/Sửa
-  const [selectedSP, setSelectedSP] = useState("");
-  const [soLuong, setSoLuong] = useState("");
-  const [donGia, setDonGia] = useState("");
+  // Lọc dữ liệu theo mã phiếu nhập + search
+const filteredData = useMemo(() => {
+    return getPurchaseDetailFilter({ maPN, productName: searchProduct });
+  }, [maPN, searchProduct]);
 
-  // Filter
-  const [filterSP, setFilterSP] = useState("");
+  const columns = ["Mã sản phẩm","Sản phẩm", "Số lượng", "Đơn giá", "Thành tiền", "Tác vụ"];
 
-  // Lọc dữ liệu theo Mã phiếu nhập và filter SP
-  const displayedData = useMemo(() => {
-    return dataChiTietPhieuNhap.filter(d =>
-      d[0] === Number(maPN) &&
-      (!filterSP || d[1] === parseInt(filterSP))
-    );
-  }, [maPN, filterSP]);
-
+  // Modal Edit / Delete
   useEffect(() => {
-    setData(displayedData);
-  }, [displayedData]);
+    const editModalEl = document.getElementById("editModal");
+    const deleteModalEl = document.getElementById("deleteModal");
 
-  const handleEditClick = (row) => {
-    setCurrentRow(row);
-    setSelectedSP(row[1].toString());
-    setSoLuong(row[3].toString());
-    setDonGia(row[4].toString());
+    const handleShow = (event) => {
+      const button = event.relatedTarget;
+      if (!button) return;
+
+      // Lấy productId từ data attribute trên button
+      const productId = button.getAttribute("data-product-id");
+      if (!productId) return;
+
+      // Lấy bản ghi chi tiết phiếu nhập tương ứng
+      const [row] = getPurchaseDetailByPN(maPN, productId);
+      if (!row) return;
+
+      if (button.dataset.bsTarget === "#editModal") {
+        setCurrentRow(row);
+        setProductId(row._productId);
+        setQuantity(row._quantity);
+        setUnitPrice(row._unitPrice);
+      } else if (button.dataset.bsTarget === "#deleteModal") {
+        setCurrentRow(row);
+      }
+    };
+
+    if (editModalEl) editModalEl.addEventListener("show.bs.modal", handleShow);
+    if (deleteModalEl) deleteModalEl.addEventListener("show.bs.modal", handleShow);
+
+    return () => {
+      if (editModalEl) editModalEl.removeEventListener("show.bs.modal", handleShow);
+      if (deleteModalEl) deleteModalEl.removeEventListener("show.bs.modal", handleShow);
+    };
+  }, [maPN]);
+
+  // Thêm mới
+  const handleAddClick = () => {
+    setProductId("");
+    setQuantity("");
+    setUnitPrice("");
+    setCurrentRow(null);
   };
 
-  const handleAdd = () => {
-    if (!selectedSP || !soLuong || !donGia) return;
-    const sp = dataSanPham.find(s => s[0] === parseInt(selectedSP));
-    const newRow = [
-      Number(maPN),
-      parseInt(selectedSP),
-      sp ? sp[1] : "Không xác định",
-      parseInt(soLuong),
-      parseInt(donGia)
-    ];
-    dataChiTietPhieuNhap.push(newRow);
-    setData([...data, newRow]);
-    setSelectedSP(""); setSoLuong(""); setDonGia("");
+   // States cho checkbox
+  const [checkedMap, setCheckedMap] = useState({});
+  const [checkAll, setCheckAll] = useState(false);
+
+   // Toggle từng checkbox
+  const toggleChecked = (id) => {
+    setCheckedMap(prev => {
+      const newChecked = { ...prev, [id]: !prev[id] };
+      if (!newChecked[id]) setCheckAll(false);
+      return newChecked;
+    });
   };
 
-  const handleSave = () => {
-    if (!currentRow) return;
-    const sp = dataSanPham.find(s => s[0] === parseInt(selectedSP));
-    const updatedData = data.map(d =>
-      d[0] === currentRow[0] && d[1] === currentRow[1]
-        ? [d[0], parseInt(selectedSP), sp ? sp[1] : "Không xác định", parseInt(soLuong), parseInt(donGia)]
-        : d
-    );
-    const indexDemo = dataChiTietPhieuNhap.findIndex(d => d[0] === currentRow[0] && d[1] === currentRow[1]);
-    if (indexDemo !== -1) {
-      dataChiTietPhieuNhap[indexDemo] = [Number(maPN), parseInt(selectedSP), sp ? sp[1] : "Không xác định", parseInt(soLuong), parseInt(donGia)];
+  // Toggle check all
+  const toggleCheckAll = () => {
+    const newCheckAll = !checkAll;
+    setCheckAll(newCheckAll);
+    const newCheckedMap = {};
+    filteredData.forEach(r => {
+      newCheckedMap[r._productId] = newCheckAll;
+    });
+    setCheckedMap(newCheckedMap);
+  };
+
+  // Tính tổng tiền các hàng đã chọn
+  const totalSelectedAmount = filteredData.reduce((sum, r) => {
+    if (checkedMap[r._productId]) {
+      return sum + (parseInt(r._quantity) * parseFloat(r._unitPrice));
     }
-    setData(updatedData);
-    setCurrentRow(null);
-  };
-
-  const handleDelete = () => {
-    if (!currentRow) return;
-    const filtered = data.filter(d => !(d[0] === currentRow[0] && d[1] === currentRow[1]));
-    setData(filtered);
-    const indexDemo = dataChiTietPhieuNhap.findIndex(d => d[0] === currentRow[0] && d[1] === currentRow[1]);
-    if (indexDemo !== -1) dataChiTietPhieuNhap.splice(indexDemo, 1);
-    setCurrentRow(null);
-  };
-
-  const columns = ["Mã PN", "Sản phẩm", "Số lượng", "Đơn giá", "Tác vụ"];
+    return sum;
+  }, 0);
 
   return (
     <div className="container-fluid px-4">
-      <h1 className="mt-4">Chi Tiết Phiếu Nhập</h1>
+      <h1 className="mt-4">Chi tiết phiếu nhập</h1>
+
+      {/* Breadcrumb */}
       <Breadcrumb
         items={[
-          { name: "Phiếu Nhập", link: "/phieu-nhap" },
-          { name: `Chi Tiết Phiếu Nhập #${maPN}` }
+          { name: "Phiếu nhập", link: "/phieu-nhap" },
+          { name: "Chi tiết phiếu nhập" }
         ]}
       />
 
+      {/* Sub-title & Add button */}
       <div className="d-flex justify-content-between align-items-center mb-3">
-        <p className="mb-0">Bảng hiển thị chi tiết sản phẩm trong phiếu nhập.</p>
+        <p className="mb-0">
+          Danh sách chi tiết phiếu nhập
+        </p>
         <button
           className="btn btn-success"
           data-bs-toggle="modal"
           data-bs-target="#addModal"
-          onClick={() => { setSelectedSP(""); setSoLuong(""); setDonGia(""); }}
+          onClick={handleAddClick}
         >
           <i className="fas fa-plus me-1"></i> Thêm mới
         </button>
       </div>
 
-      {/* Bộ lọc */}
-      <div className="row g-2 mb-3 align-items-end">
-        <div className="col-md-4">
-          <label className="form-label">Sản phẩm</label>
-          <SelectWithScroll
-            options={["Tất cả", ...dataSanPham.map(s => s[1])]}
-            value={
-              filterSP
-                ? dataSanPham.find(s => s[0] === parseInt(filterSP))?.[1]
-                : "Tất cả"
-            }
-            onChange={(val) => {
-              if (val === "Tất cả") {
-                setFilterSP("");
-              } else {
-                const sp = dataSanPham.find(s => s[1] === val);
-                setFilterSP(sp ? sp[0].toString() : "");
-              }
-            }}
-          />
-        </div>
+      {/* Search */}
+      <div className="mb-3" style={{ maxWidth: "300px" }}>
+        <input
+          type="text"
+          className="form-control form-control-sm"
+          placeholder="Tìm theo tên sản phẩm..."
+          value={searchProduct}
+          onChange={e => setSearchProduct(e.target.value)}
+        />
       </div>
 
+      {/* Table */}
       <TableComponent
-        title="Danh sách Chi Tiết Phiếu Nhập"
+        title="Danh sách chi tiết phiếu nhập"
         columns={columns}
-        data={data}
+        hiddenColumns={[0]}
+        data={filteredData.map(d => [d._productId, d._productName, d._quantity, d._unitPrice, parseInt(d.quantity )* parseFloat(d._unitPrice)])}
         renderCell={(cell, column, row) => {
-          if (column === "Mã PN") return <td>{row[0]}</td>;
-          if (column === "Sản phẩm") return <td>{row[2]}</td>;
-          if (column === "Số lượng") return <td>{row[3]}</td>;
-          if (column === "Đơn giá") return <td>{row[4].toLocaleString("vi-VN")} VNĐ</td>;
           if (column === "Tác vụ") {
+            const isChecked = checkedMap[row[0]] || false;
             return (
-              <td>
+              <td className="d-flex gap-1">
                 <button
-                  className="btn btn-primary btn-sm me-1"
+                  className="btn btn-primary btn-sm"
                   data-bs-toggle="modal"
                   data-bs-target="#editModal"
-                  onClick={() => handleEditClick(row)}
+                  data-product-id={row[0]}
                 >
                   <i className="fas fa-edit"></i>
                 </button>
@@ -150,10 +163,23 @@ function ChiTietPhieuNhap() {
                   className="btn btn-danger btn-sm"
                   data-bs-toggle="modal"
                   data-bs-target="#deleteModal"
-                  onClick={() => setCurrentRow(row)}
+                  data-product-id={row[0]}
                 >
                   <i className="fas fa-trash-alt"></i>
                 </button>
+                <span
+                  onClick={() => toggleChecked(row[0])}
+                  style={{
+                    cursor: "pointer",
+                    color: isChecked ? "#28a745" : "#6c757d",
+                    display: "flex",
+                    alignItems: "center",
+                    fontSize: "1.2rem"
+                  }}
+                  title={isChecked ? "Đã chọn" : "Chưa chọn"}
+                >
+                  {isChecked ? <FaCheckSquare /> : <FaSquare />}
+                </span>
               </td>
             );
           }
@@ -161,75 +187,148 @@ function ChiTietPhieuNhap() {
         }}
       />
 
-      {/* Modal Thêm */}
+      <div className="d-flex justify-content-between align-items-center mt-2">
+        <div>
+          <input
+            type="checkbox"
+            checked={checkAll}
+            onChange={toggleCheckAll}
+            id="checkAll"
+            className="form-check-input me-2"
+          />
+          <label htmlFor="checkAll" className="form-check-label">Chọn tất cả</label>
+        </div>
+        <div>
+          <strong>Tổng tiền đã chọn: </strong> {totalSelectedAmount} VNĐ
+        </div>
+      </div>
+
+      {/* Modal Add */}
       <div className="modal fade" id="addModal" tabIndex="-1">
         <div className="modal-dialog">
           <div className="modal-content">
             <div className="modal-header">
-              <h5 className="modal-title">Thêm Chi Tiết Phiếu Nhập</h5>
+              <h5 className="modal-title">Thêm chi tiết phiếu nhập</h5>
               <button type="button" className="btn-close" data-bs-dismiss="modal"></button>
             </div>
             <div className="modal-body">
+              <div className="mb-3" hidden>
+                <label className="form-label">Phiếu nhập</label>
+                <input type="text" className="form-control" value={pnDisplay} readOnly />
+              </div>
               <div className="mb-3">
                 <label className="form-label">Sản phẩm</label>
                 <SelectWithScroll
-                  options={dataSanPham.map(s => s[1])}
-                  value={selectedSP ? dataSanPham.find(s => s[0] === parseInt(selectedSP))?.[1] : ""}
-                  onChange={(val) => { const sp = dataSanPham.find(s => s[1] === val); setSelectedSP(sp ? sp[0].toString() : ""); }}
+                  options={["Tất cả", ...dataSanPham.map(sp => `${sp._id ?? sp[0]}: ${sp._name ?? sp[1]}`)]}
+                  value={
+                    productId
+                      ? `${productId}: ${dataSanPham.find(sp => (sp._id ?? sp[0]) === productId)?._name ?? dataSanPham.find(sp => (sp._id ?? sp[0]) === productId)[1]}`
+                      : "Tất cả"
+                  }
+                  onChange={val =>
+                    setProductId(val === "Tất cả" ? "" : val.split(":")[0])
+                  }
+                />
+              </div>
+
+              <div className="mb-3">
+                <label className="form-label">Số lượng</label>
+                <input
+                  type="number"
+                  className="form-control"
+                  value={quantity}
+                  onChange={e => setQuantity(parseInt(e.target.value))}
                 />
               </div>
               <div className="mb-3">
-                <label className="form-label">Số lượng</label>
-                <input type="number" className="form-control" value={soLuong} onChange={e => setSoLuong(e.target.value)} />
-              </div>
-              <div className="mb-3">
                 <label className="form-label">Đơn giá</label>
-                <input type="number" className="form-control" value={donGia} onChange={e => setDonGia(e.target.value)} />
+                <input
+                  type="number"
+                  className="form-control"
+                  value={unitPrice}
+                  onChange={e => setUnitPrice(parseInt(e.target.value))}
+                />
               </div>
             </div>
             <div className="modal-footer">
               <button className="btn btn-secondary" data-bs-dismiss="modal">Hủy</button>
-              <button className="btn btn-success" data-bs-dismiss="modal" onClick={handleAdd}>Thêm mới</button>
+              <button
+                className="btn btn-success"
+                data-bs-dismiss="modal"
+                onClick={() => {
+                  alert(`Thêm chi tiết: ${productId}, SL: ${quantity}, ĐG: ${unitPrice}`);
+                }}
+              >
+                Thêm
+              </button>
             </div>
           </div>
         </div>
       </div>
 
-      {/* Modal Sửa */}
+      {/* Modal Edit */}
       <div className="modal fade" id="editModal" tabIndex="-1">
         <div className="modal-dialog">
           <div className="modal-content">
             <div className="modal-header">
-              <h5 className="modal-title">Chỉnh sửa Chi Tiết Phiếu Nhập</h5>
+              <h5 className="modal-title">Chỉnh sửa chi tiết phiếu nhập</h5>
               <button type="button" className="btn-close" data-bs-dismiss="modal"></button>
             </div>
             <div className="modal-body">
+              <div className="mb-3" hidden>
+                <label className="form-label">Phiếu nhập</label>
+                <input type="text" className="form-control" value={pnDisplay} readOnly />
+              </div>
               <div className="mb-3">
                 <label className="form-label">Sản phẩm</label>
                 <SelectWithScroll
-                  options={dataSanPham.map(s => s[1])}
-                  value={selectedSP ? dataSanPham.find(s => s[0] === parseInt(selectedSP))?.[1] : ""}
-                  onChange={(val) => { const sp = dataSanPham.find(s => s[1] === val); setSelectedSP(sp ? sp[0].toString() : ""); }}
+                  options={dataSanPham.map(sp => `${sp._id ?? sp[0]}: ${sp._name ?? sp[1]}`)}
+                  value={
+                    productId
+                      ? `${productId}: ${dataSanPham.find(sp => (sp._id ?? sp[0]) === productId)?._name ?? dataSanPham.find(sp => (sp._id ?? sp[0]) === productId)[1]}`
+                      : ""
+                  }
+                  onChange={val =>
+                    setProductId(val === "" ? "" : val.split(":")[0])
+                  }
                 />
               </div>
               <div className="mb-3">
                 <label className="form-label">Số lượng</label>
-                <input type="number" className="form-control" value={soLuong} onChange={e => setSoLuong(e.target.value)} />
+                <input
+                  type="number"
+                  className="form-control"
+                  value={quantity}
+                  onChange={e => setQuantity(parseInt(e.target.value))}
+                />
               </div>
               <div className="mb-3">
                 <label className="form-label">Đơn giá</label>
-                <input type="number" className="form-control" value={donGia} onChange={e => setDonGia(e.target.value)} />
+                <input
+                  type="number"
+                  className="form-control"
+                  value={unitPrice}
+                  onChange={e => setUnitPrice(parseInt(e.target.value))}
+                />
               </div>
             </div>
             <div className="modal-footer">
               <button className="btn btn-secondary" data-bs-dismiss="modal">Hủy</button>
-              <button className="btn btn-primary" data-bs-dismiss="modal" onClick={handleSave}>Lưu</button>
+              <button
+                className="btn btn-primary"
+                data-bs-dismiss="modal"
+                onClick={() => {
+                  alert(`Cập nhật chi tiết: ${productId}, SL: ${quantity}, ĐG: ${unitPrice}`);
+                }}
+              >
+                Lưu
+              </button>
             </div>
           </div>
         </div>
       </div>
 
-      {/* Modal Xóa */}
+      {/* Modal Delete */}
       <div className="modal fade" id="deleteModal" tabIndex="-1">
         <div className="modal-dialog modal-sm">
           <div className="modal-content">
@@ -237,10 +336,22 @@ function ChiTietPhieuNhap() {
               <h5 className="modal-title">Xác nhận xóa</h5>
               <button type="button" className="btn-close" data-bs-dismiss="modal"></button>
             </div>
-            <div className="modal-body">Bạn có chắc muốn xóa chi tiết phiếu nhập này?</div>
+            <div className="modal-body">
+              <p>
+                Bạn có chắc muốn xóa chi tiết sản phẩm <strong>{currentRow?.productName}</strong> của phiếu nhập <strong>{pnDisplay}</strong>?
+              </p>
+            </div>
             <div className="modal-footer">
               <button className="btn btn-secondary" data-bs-dismiss="modal">Không</button>
-              <button className="btn btn-danger" data-bs-dismiss="modal" onClick={handleDelete}>Có</button>
+              <button
+                className="btn btn-danger"
+                data-bs-dismiss="modal"
+                onClick={() => {
+                  alert(`Xóa chi tiết: ${currentRow?.productName}`);
+                }}
+              >
+                Có
+              </button>
             </div>
           </div>
         </div>
@@ -248,5 +359,3 @@ function ChiTietPhieuNhap() {
     </div>
   );
 }
-
-export default ChiTietPhieuNhap;
